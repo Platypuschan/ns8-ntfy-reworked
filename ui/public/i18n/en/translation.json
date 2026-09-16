@@ -30,6 +30,8 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "advanced": "Advanced",
+    "server_config": "ntfy server.yml",
+    "server_config_helper": "Complete ntfy server configuration in YAML format. NS8 automatically sets behind-proxy=true and proxy-forwarded-header=X-Forwarded-For. proxy-trusted-hosts is only needed for additional upstream proxies. An enabled, compatible NS8 smarthost overrides smtp-sender-addr, -user and -pass; smtp-sender-from in this file is preserved. Invalid YAML prevents ntfy from starting.",
     "configuring": "Configuring",
     "instance_configuration": "Configure ntfy",
     "domain_already_used_in_traefik": "Domain already used in traefik",

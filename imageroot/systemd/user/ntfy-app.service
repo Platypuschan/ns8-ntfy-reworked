@@ -11,7 +11,6 @@ After=ntfy.service
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
 EnvironmentFile=%S/state/environment
-EnvironmentFile=-%S/state/smarthost.env
 WorkingDirectory=%S/state
 Restart=always
 TimeoutStopSec=70
@@ -22,13 +21,10 @@ ExecStart=/usr/bin/podman run --conmon-pidfile %t/ntfy-app.pid \
     --cidfile %t/ntfy-app.ctr-id --cgroups=no-conmon \
     --pod-id-file %t/ntfy.pod-id --replace -d --name  ntfy-app \
     --volume ./:/var/lib/ntfy \
-    --env=NTFY_* \
-    --env NTFY_SMTP_SENDER_ADDR=${SMTP_HOST} \
-    --env NTFY_SMTP_SERVER_LISTEN=${SMTP_PORT} \
-    --env NTFY_SMTP_SENDER_USER=${SMTP_USERNAME} \
-    --env NTFY_SMTP_SENDER_PASS=${SMTP_PASSWORD} \
-    --env NTFY_SMTP_SENDER_FROM=${SMTP_USERNAME} \
-    --env NTFY_SMTP_SERVER_DOMAIN=${SMTP_HOST} \
+    --volume ./config:/etc/ntfy:ro \
+    --env NTFY_BEHIND_PROXY=true \
+    --env NTFY_PROXY_FORWARDED_HEADER=X-Forwarded-For \
+    --env-file ./smarthost.env \
     ${NTFY_IMAGE} serve
 ExecStop=/usr/bin/podman stop --ignore --cidfile %t/ntfy-app.ctr-id -t 10
 ExecReload=/usr/bin/podman kill -s HUP ntfy-app
