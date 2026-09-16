@@ -33,7 +33,7 @@ Configure current module with test server.yml
     ...    attachment-cache-dir: "/var/lib/ntfy/attachments"
     ...    behind-proxy: false
     ...    proxy-forwarded-header: "X-Real-IP"
-    ${payload} =    Evaluate    json.dumps({"host": "${HOST}", "http2https": False, "lets_encrypt": False, "server_config": """${server_config}"""})    modules=json
+    ${payload} =    Evaluate    json.dumps({"host": $HOST, "http2https": False, "lets_encrypt": False, "server_config": $server_config})    modules=json
     ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0    configure-module failed: ${output}
