@@ -1,6 +1,6 @@
 # ns8-ntfy
 
-THis is a NEthserver 8 App for NTFY(notify) [NTFY](https://github.com/binwiederhier/ntfy) 
+This is a NethServer 8 app for [ntfy](https://github.com/binwiederhier/ntfy).
 https://ntfy.sh/
 
 ntfy (pronounced notify) is a simple HTTP-based pub-sub notification service. It allows you to send notifications to your phone or desktop via scripts from any computer, and/or using a REST API. It's infinitely flexible, and 100% free software.
@@ -18,43 +18,74 @@ Output example:
 
 ## Configure
 
-Let's assume that the mattermost instance is named `ntfy1`.
+Let's assume that the ntfy instance is named `ntfy1`.
 
 Launch `configure-module`, by setting the following parameters:
 - `host`: a fully qualified domain name for the application
 - `http2https`: enable or disable HTTP to HTTPS redirection (true/false)
 - `lets_encrypt`: enable or disable Let's Encrypt certificate (true/false)
-- `NTFY_BASE_URL`: Public facing base URL of the service (e.g. https://ntfy.domain.sh)
-- `NTFY_AUTH_DEFAULT_ACCESSt`: Default permissions if no matching entries in the auth database are found. Default is read-write. read-write, read-only, write-only, deny-all
-- `NTFY_BEHIND_PROXY`: enable or disable default true (true/false)
-- `NTFY_ENABLE_LOGIN`: enable or disable default false (true/false)
-- `NTFY_ENABLE_SIGNUP`: enable or disable default false (true/false)
-- `NTFY_UPSTREAM_BASE_URL`: Forward poll request to an upstream server, this is needed for iOS push notifications for self-hosted servers https://ntfy.sh
-- `NTFY_UPSTREAM_ACCESS_TOKEN`: Access token to use for the upstream server; needed only if upstream rate limits are exceeded or upstream server requires auth
-- `NTFY_WEB_PUSH_EMAIL_ADDRESS`: Web Push: Sender email address
-- `NTFY_CACHE_FILE`: If set, messages are cached in a local SQLite database instead of only in-memory. This allows for service restarts without losing messages in support of the since= parameter
-- `NTFY_ATTACHMENT_CACHE_DIR`: enable or disable Let's Encrypt certificate (true/false)
-- `NTFY_AUTH_FILE`: Auth database file used for access control. If set, enables authentication and access control. See access control.
-- `NTFY_WEB_PUSH_FILE`: Web Push: Database file that stores subscriptions
-- `NTFY_WEB_PUSH_PUBLIC_KEY`: Web Push: Public Key. Run ntfy webpush keys to generate
-- `NTFY_WEB_PUSH_PRIVATE_KEY`: Web Push: Private Key. Run ntfy webpush keys to generate
+- `server_config`: the complete contents of ntfy's `server.yml` (optional for
+  backward-compatible API calls)
 
-[More Variables](https://docs.ntfy.sh/config/#config-options)
-Example:
+The web interface exposes `server_config` as a multiline editor under
+**Advanced**. The YAML file is the source of truth for user-managed ntfy
+settings. A small set of `NTFY_*` environment variables is reserved for the
+NS8 reverse-proxy and smarthost integrations described below. See the
+[ntfy configuration reference](https://docs.ntfy.sh/config/#config-options).
+
+Example `server.yml` suitable as a private starting point:
+
+```yaml
+base-url: "https://ntfy.domain.com"
+cache-file: "/var/lib/ntfy/cache.db"
+attachment-cache-dir: "/var/lib/ntfy/attachments"
+auth-file: "/var/lib/ntfy/auth.db"
+auth-default-access: "deny-all"
+enable-login: true
+enable-signup: false
+```
+
+Configure the module from the command line with a local `server.yml`:
 
 ```
-api-cli run configure-module --agent module/ntfy1 --data - <<EOF
-{
-  "host": "ntfy.domain.com",
-  "http2https": true,
-  "lets_encrypt": false
-}
-EOF
+server_config=$(<server.yml)
+jq -n \
+  --arg host "ntfy.domain.com" \
+  --arg server_config "$server_config" \
+  '{host: $host, http2https: true, lets_encrypt: false, server_config: $server_config}' |
+api-cli run configure-module --agent module/ntfy1 --data -
 ```
 
 The above command will:
 - start and configure the ntfy instance
-- configure a virtual host for trafik to access the instance
+- configure a virtual host for Traefik to access the instance
+- save `server.yml` as `state/config/server.yml` with mode `0600`
+
+The config directory is mounted read-only at `/etc/ntfy` inside the ntfy
+container. The configuration file is included in module backups. Invalid YAML
+will prevent ntfy from starting; inspect the module service log after changing
+advanced settings.
+
+When upgrading from an older release, the update action converts existing
+`NTFY_*` values to `server.yml` once and then removes those legacy variables.
+
+## Reverse proxy
+
+The module is reachable only through the node's Traefik route. It therefore
+always injects these runtime settings:
+
+```text
+NTFY_BEHIND_PROXY=true
+NTFY_PROXY_FORWARDED_HEADER=X-Forwarded-For
+```
+
+They override the corresponding keys in `server.yml`. Traefik adds
+`X-Forwarded-For` automatically. Do not add the NS8 Traefik or the loopback
+address to `proxy-trusted-hosts`: ntfy uses that option only to strip
+additional upstream proxy addresses from a multi-proxy forwarded chain. Leave
+it unset for a normal NS8 installation. If another reverse proxy or CDN is in
+front of NS8, configure its known IP addresses or CIDRs manually in
+`proxy-trusted-hosts`.
 
 ## Get the configuration
 You can retrieve the configuration with
@@ -70,7 +101,7 @@ api-cli run get-configuration --agent module/ntfy1
 - run the command inside the container 
  `podman exec ntfy-app  ntfy webpush keys`
  ```
-Web Push keys generated. Add the following lines to your config file:
+Web Push keys generated. Add the following lines to the Advanced YAML editor:
 
 web-push-public-key: BIoV3b7JhU0y-4CeP32PmFcVTQB5_rAfC99S8684FI72pC50GvICMwmTn1TLcqqbiREcYLmgQVMvTRDS75Bpg_E
 web-push-private-key: BrOm7ZuMouXzV8lT8xoC2wCSa7wscaZ9_JN3oKQama8
@@ -84,24 +115,28 @@ To uninstall the instance:
 
     remove-module --no-preserve ntfy1
 
-## Smarthost setting discovery
+## SMTP
 
-Some configuration settings, like the smarthost setup, are not part of the
-`configure-module` action input: they are discovered by looking at some
-Redis keys.  To ensure the module is always up-to-date with the
-centralized [smarthost
-setup](https://nethserver.github.io/ns8-core/core/smarthost/) every time
-ntfy starts, the command `bin/discover-smarthost` runs and refreshes
-the `state/smarthost.env` file with fresh values from Redis.
+When the cluster smarthost is enabled, the module reads its current host, port,
+username and password from the local NS8 Redis replica before every start. It
+injects them as `NTFY_SMTP_SENDER_ADDR`, `NTFY_SMTP_SENDER_USER` and
+`NTFY_SMTP_SENDER_PASS`. A `smarthost-changed` event restarts ntfy so changes
+are applied without editing `server.yml`. The generated credential file has
+mode `0600` and is not included in module backups.
 
-Furthermore if smarthost setup is changed when ntfy is already
-running, the event handler `events/smarthost-changed/10reload_services`
-restarts the main module service.
+NS8 does not define a sender email address. If `smtp-sender-from` exists in
+`server.yml`, the module preserves it. Otherwise it uses an email-shaped SMTP
+username, or finally `no-reply@<ntfy-host>`.
 
-See also the `systemd/user/ntfy.service` file.
+ntfy's SMTP client supports plain SMTP and opportunistic STARTTLS, with normal
+certificate verification. It does not support implicit SMTPS/TLS, commonly
+used on port 465, nor disabling certificate verification. An NS8 smarthost
+configured for implicit TLS is therefore not injected and a warning is written
+to the service journal. If the NS8 smarthost is disabled, all manual
+`smtp-sender-*` settings in `server.yml` remain effective.
 
-This setting discovery is just an example to understand how the module is
-expected to work: it can be rewritten or discarded completely.
+Incoming email publishing is unrelated to the NS8 smarthost. Configure its
+`smtp-server-*` options directly in the Advanced YAML editor.
 
 ## Debug
 

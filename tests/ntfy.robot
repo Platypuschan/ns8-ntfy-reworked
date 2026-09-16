@@ -10,7 +10,13 @@ Check if ntfy is installed correctly
     Set Suite Variable    ${module_id}    ${output.module_id}
 
 Check if ntfy can be configured
-    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '{}'
+    ${payload} =    Evaluate    json.dumps({"host": "ntfy.example.org", "http2https": False, "lets_encrypt": False, "server_config": "base-url: http://ntfy.example.org\\nbehind-proxy: true\\ncache-file: /var/lib/ntfy/cache.db\\n"})    modules=json
+    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
+    ...    return_rc=True  return_stdout=False
+    Should Be Equal As Integers    ${rc}  0
+
+Check if server.yml is mounted
+    ${rc} =    Execute Command    runagent -m ${module_id} podman exec ntfy-app grep -F 'behind-proxy: true' /etc/ntfy/server.yml
     ...    return_rc=True  return_stdout=False
     Should Be Equal As Integers    ${rc}  0
 
