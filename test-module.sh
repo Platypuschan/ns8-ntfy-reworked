@@ -1,36 +1,76 @@
 #!/bin/bash
 
 #
-# Copyright (C) 2023 Nethesis S.r.l.
+# Copyright (C) 2026 Nethesis S.r.l.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-LEADER_NODE=$1
-IMAGE_URL=$2
-SSH_KEYFILE=${SSH_KEYFILE:-$HOME/.ssh/id_rsa}
+set -Eeuo pipefail
 
-ssh_key="$(cat $SSH_KEYFILE)"
+LEADER_NODE="${1:?missing leader node address}"
+IMAGE_URL="${2:?missing module image URL}"
+SCENARIO="${3:?missing test scenario}"
+SSH_KEYFILE="${SSH_KEYFILE:-${HOME}/.ssh/id_ecdsa}"
+RUNNER_IMAGE="ghcr.io/marketsquare/robotframework-browser/rfbrowser-stable:19.11.0"
+CONTAINER_NAME="rf-ntfy-${SCENARIO}"
 
-podman run -i \
-    -v .:/home/pwuser/ns8-module:z \
-    --name rf-core-runner ghcr.io/marketsquare/robotframework-browser/rfbrowser-stable:v10.0.3 \
-    bash -l -s <<EOF
-    set -e
-    echo "$ssh_key" > /home/pwuser/ns8-key
-    set -x
-    pip install -r /home/pwuser/ns8-module/tests/pythonreq.txt
-    mkdir ~/outputs
-    cd /home/pwuser/ns8-module
-    robot -v NODE_ADDR:${LEADER_NODE} \
-        -v IMAGE_URL:${IMAGE_URL} \
-        -v SSH_KEYFILE:/home/pwuser/ns8-key \
-	-d ~/outputs /home/pwuser/ns8-module/tests/
+case "${SCENARIO}" in
+    install|update) ;;
+    *)
+        echo "Unsupported test scenario '${SCENARIO}'; expected install or update." >&2
+        exit 64
+        ;;
+esac
+
+if [[ ! -r "${SSH_KEYFILE}" ]]; then
+    echo "SSH key is not readable: ${SSH_KEYFILE}" >&2
+    exit 66
+fi
+
+SSH_PRIVATE_KEY="$(<"${SSH_KEYFILE}")"
+export IMAGE_URL LEADER_NODE SCENARIO SSH_PRIVATE_KEY
+
+cleanup() {
+    podman rm --force "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+mkdir -p "tests/outputs/${SCENARIO}"
+
+set +e
+podman run --interactive \
+    --name "${CONTAINER_NAME}" \
+    --replace \
+    --volume "${PWD}:/home/pwuser/ns8-module:z" \
+    --env IMAGE_URL \
+    --env LEADER_NODE \
+    --env SCENARIO \
+    --env SSH_PRIVATE_KEY \
+    "${RUNNER_IMAGE}" \
+    bash -l -s <<'EOF'
+set -Eeuo pipefail
+
+umask 077
+printf '%s\n' "${SSH_PRIVATE_KEY}" > /home/pwuser/ns8-key
+
+pip install --quiet --disable-pip-version-check \
+    robotframework-sshlibrary==3.8.0
+
+cd /home/pwuser/ns8-module
+exec robot \
+    -v "NODE_ADDR:${LEADER_NODE}" \
+    -v "IMAGE_URL:${IMAGE_URL}" \
+    -v "SSH_KEYFILE:/home/pwuser/ns8-key" \
+    -v "SCENARIO:${SCENARIO}" \
+    --name "ntfy-${SCENARIO}" \
+    --outputdir /home/pwuser/outputs \
+    tests/
 EOF
+test_status=$?
+set -e
 
-tests_res=$?
+podman cp \
+    "${CONTAINER_NAME}:/home/pwuser/outputs/." \
+    "tests/outputs/${SCENARIO}/" 2>/dev/null || true
 
-podman cp rf-core-runner:/home/pwuser/outputs tests/
-podman stop rf-core-runner
-podman rm rf-core-runner
-
-exit ${tests_res}
+exit "${test_status}"
