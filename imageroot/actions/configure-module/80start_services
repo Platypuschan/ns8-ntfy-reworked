@@ -15,4 +15,8 @@ touch smarthost.env
 chmod 600 smarthost.env
 
 systemctl --user enable ntfy.service
-systemctl --user restart ntfy.service
+if systemctl --user is-active --quiet ntfy.service; then
+    systemctl --user restart ntfy-app.service
+else
+    systemctl --user start ntfy.service
+fi
