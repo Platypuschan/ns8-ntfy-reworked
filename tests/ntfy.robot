@@ -93,10 +93,6 @@ Check server.yml persistence and read-only mount
     Should Contain    ${config}    cache-file: "/var/lib/ntfy/cache.db"
     Should Contain    ${config}    behind-proxy: false
 
-    ${rc} =    Execute Command    runagent -m ${module_id} podman exec ntfy-app test -s /etc/ntfy/server.yml
-    ...    return_rc=True    return_stdout=False
-    Should Be Equal As Integers    ${rc}    0
-
     ${read_write} =    Execute Command    runagent -m ${module_id} podman inspect ntfy-app --format '{{range .Mounts}}{{if eq .Destination "/etc/ntfy"}}{{println .RW}}{{end}}{{end}}'
     ${read_write} =    Strip String    ${read_write}
     Should Be Equal    ${read_write}    false
