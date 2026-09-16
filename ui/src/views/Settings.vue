@@ -61,11 +61,23 @@
                 $t("settings.enabled")
               }}</template>
             </cv-toggle>
-              <!-- advanced options -->
+            <!-- advanced options -->
             <cv-accordion ref="accordion" class="maxwidth mg-bottom">
               <cv-accordion-item :open="toggleAccordion[0]">
                 <template slot="title">{{ $t("settings.advanced") }}</template>
                 <template slot="content">
+                  <cv-text-area
+                    v-model="serverConfig"
+                    :label="$t('settings.server_config')"
+                    :helper-text="$t('settings.server_config_helper')"
+                    :invalid-message="error.server_config"
+                    :disabled="
+                      loading.getConfiguration || loading.configureModule
+                    "
+                    rows="18"
+                    ref="server_config"
+                    class="server-config"
+                  />
                 </template>
               </cv-accordion-item>
             </cv-accordion>
@@ -125,6 +137,7 @@ export default {
       host: "",
       isLetsEncryptEnabled: false,
       isHttpToHttpsEnabled: true,
+      serverConfig: "",
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -135,11 +148,28 @@ export default {
         host: "",
         lets_encrypt: "",
         http2https: "",
+        server_config: "",
       },
     };
   },
   computed: {
     ...mapState(["instanceName", "core", "appName"]),
+  },
+  watch: {
+    host(newHost, oldHost) {
+      const oldUrl = `https://${oldHost}`;
+      const newUrl = `https://${newHost}`;
+      const replacements = new Map([
+        [`base-url: "${oldUrl}"`, `base-url: "${newUrl}"`],
+        [`base-url: '${oldUrl}'`, `base-url: '${newUrl}'`],
+        [`base-url: ${oldUrl}`, `base-url: ${newUrl}`],
+      ]);
+
+      this.serverConfig = this.serverConfig
+        .split("\n")
+        .map((line) => replacements.get(line) || line)
+        .join("\n");
+    },
   },
   created() {
     this.getConfiguration();
@@ -202,6 +232,7 @@ export default {
       this.host = config.host;
       this.isLetsEncryptEnabled = config.lets_encrypt;
       this.isHttpToHttpsEnabled = config.http2https;
+      this.serverConfig = config.server_config;
 
       this.loading.getConfiguration = false;
       this.focusElement("host");
@@ -236,8 +267,6 @@ export default {
       }
     },
     async configureModule() {
-      this.error.test_imap = false;
-      this.error.test_smtp = false;
       const isValidationOk = this.validateConfigureModule();
       if (!isValidationOk) {
         return;
@@ -271,6 +300,7 @@ export default {
             host: this.host,
             lets_encrypt: this.isLetsEncryptEnabled,
             http2https: this.isHttpToHttpsEnabled,
+            server_config: this.serverConfig,
           },
           extra: {
             title: this.$t("settings.instance_configuration", {
@@ -313,5 +343,15 @@ export default {
 
 .maxwidth {
   max-width: 38rem;
+}
+
+.server-config {
+  width: 100%;
+}
+
+.server-config ::v-deep textarea {
+  min-height: 24rem;
+  font-family: "IBM Plex Mono", monospace;
+  white-space: pre;
 }
 </style>

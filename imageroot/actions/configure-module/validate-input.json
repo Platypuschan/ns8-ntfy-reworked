@@ -7,7 +7,8 @@
         {
             "host": "ntfy.domain.org",
             "http2https": true,
-            "lets_encrypt": true
+            "lets_encrypt": true,
+            "server_config": "base-url: https://ntfy.domain.org\n"
         }
     ],
     "type": "object",
@@ -32,6 +33,12 @@
             "type": "boolean",
             "title": "HTTP to HTTPS redirection",
             "description": "Redirect all the HTTP requests to HTTPS"
+        },
+        "server_config": {
+            "type": "string",
+            "title": "ntfy server.yml",
+            "description": "Complete ntfy server configuration in YAML format",
+            "maxLength": 1048576
         }
     }
 }
