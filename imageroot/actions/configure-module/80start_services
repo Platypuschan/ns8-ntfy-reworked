@@ -14,4 +14,5 @@ exec 1>&2
 touch smarthost.env
 chmod 600 smarthost.env
 
-systemctl --user enable --now ntfy.service
+systemctl --user enable ntfy.service
+systemctl --user restart ntfy.service
