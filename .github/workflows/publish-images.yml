@@ -2,11 +2,65 @@ name: "Publish images"
 
 on:
   push:
+  workflow_dispatch:
 
 permissions:
   packages: write
+  actions: read
+  contents: write
+  security-events: write
+
+concurrency:
+  group: publish-suite-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   publish-images:
     if: github.run_number > 1
     uses: NethServer/ns8-github-actions/.github/workflows/publish-branch.yml@v1
+
+  module:
+    needs: publish-images
+    uses: NethServer/ns8-github-actions/.github/workflows/module-info.yml@v1
+
+  qemu:
+    name: "NS8 ${{ matrix.distro }} / ${{ matrix.scenario }}"
+    needs: module
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: rocky9
+            scenario: install
+            script: test-module-install.sh
+            cloud_image_url: ""
+          - distro: rocky9
+            scenario: update
+            script: test-module-update.sh
+            cloud_image_url: ""
+          - distro: debian13
+            scenario: install
+            script: test-module-install.sh
+            cloud_image_url: "https://laotzu.ftp.acc.umu.se/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2"
+          - distro: debian13
+            scenario: update
+            script: test-module-update.sh
+            cloud_image_url: "https://laotzu.ftp.acc.umu.se/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2"
+    permissions:
+      contents: read
+    uses: stephdl/ns8-ci-actions/.github/workflows/test-on-qemu.yml@3726dd2374c4fd2a267345d4ac975388a4bed7af
+    with:
+      distro: ${{ matrix.distro }}
+      cloud_image_url: ${{ matrix.cloud_image_url }}
+      image_url: ${{ needs.module.outputs.image }}
+      repo_ref: ${{ needs.module.outputs.sha }}
+      version_tag: ${{ needs.module.outputs.tag }}-${{ matrix.scenario }}
+      script: ${{ matrix.script }}
+      timeout_minutes: 60
+
+  trivy:
+    needs: module
+    if: ${{ needs.module.outputs.release == 'stable' || needs.module.outputs.release == 'latest' || github.event_name == 'workflow_dispatch' }}
+    uses: NethServer/ns8-github-actions/.github/workflows/scan-with-trivy.yml@v1
+    with:
+      images: ${{ needs.module.outputs.images }}
