@@ -12,8 +12,10 @@ set -e
 images=()
 # The image will be pushed to GitHub container registry
 repobase="${REPOBASE:-ghcr.io/geniusdynamics}"
-# Configure the image name
-reponame="ntfy"
+# Keep the published image name aligned with module-info.yml, which derives
+# "ntfy-reworked" from the repository name "ns8-ntfy-reworked".
+reponame="ntfy-reworked"
+repository_source="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-Platypuschan/ns8-ntfy-reworked}"
 NTFY_TAG="v2.14"
 # Create a new empty container image
 container=$(buildah from scratch)
@@ -42,6 +44,7 @@ buildah add "${container}" ui/dist /ui
 # rootfull=0 === rootless container
 # tcp-ports-demand=1 number of tcp Port to reserve , 1 is the minimum, can be udp or tcp
 buildah config --entrypoint=/ \
+	--label="org.opencontainers.image.source=${repository_source}" \
 	--label="org.nethserver.authorizations=traefik@node:routeadm" \
 	--label="org.nethserver.tcp-ports-demand=1" \
 	--label="org.nethserver.rootfull=0" \
