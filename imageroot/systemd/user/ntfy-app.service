@@ -10,7 +10,6 @@ After=ntfy.service
 
 [Service]
 Environment=PODMAN_SYSTEMD_UNIT=%n
-
 EnvironmentFile=%E/state/environment
 WorkingDirectory=%E/state
 Restart=always
