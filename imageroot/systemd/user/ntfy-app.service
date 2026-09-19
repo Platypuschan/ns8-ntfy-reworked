@@ -20,8 +20,8 @@ ExecStartPre=-runagent discover-smarthost
 ExecStart=/usr/bin/podman run --conmon-pidfile %t/ntfy-app.pid \
     --cidfile %t/ntfy-app.ctr-id --cgroups=no-conmon \
     --pod-id-file %t/ntfy.pod-id --replace -d --name  ntfy-app \
-    --volume ./:/var/lib/ntfy \
-    --volume ./config:/etc/ntfy:ro \
+    --volume ./:/var/lib/ntfy:Z \
+    --volume ./config:/etc/ntfy:ro,Z \
     --env NTFY_BEHIND_PROXY=true \
     --env NTFY_PROXY_FORWARDED_HEADER=X-Forwarded-For \
     --env-file ./smarthost.env \

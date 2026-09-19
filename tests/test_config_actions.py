@@ -24,6 +24,7 @@ MIGRATION_ACTION = (
     REPOSITORY_ROOT / "imageroot/update-module.d/10migrate_server_config"
 )
 DISCOVER_SMARTHOST = REPOSITORY_ROOT / "imageroot/bin/discover-smarthost"
+SERVICE_UNIT = REPOSITORY_ROOT / "imageroot/systemd/user/ntfy-app.service"
 
 
 class FakeAgent(types.ModuleType):
@@ -298,6 +299,14 @@ class DiscoverSmarthostTests(unittest.TestCase):
                         ),
                         "",
                     )
+
+
+class ServiceUnitTests(unittest.TestCase):
+    def test_bind_mounts_have_private_selinux_labels(self):
+        unit = SERVICE_UNIT.read_text(encoding="utf-8")
+
+        self.assertIn("--volume ./:/var/lib/ntfy:Z", unit)
+        self.assertIn("--volume ./config:/etc/ntfy:ro,Z", unit)
 
 
 if __name__ == "__main__":
