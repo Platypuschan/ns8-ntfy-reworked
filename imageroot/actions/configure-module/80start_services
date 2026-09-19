@@ -15,6 +15,10 @@ touch smarthost.env
 chmod 600 smarthost.env
 
 systemctl --user enable ntfy.service
+# An update from the original module can briefly start the legacy unit with
+# now-invalid NTFY_* values such as "None". Clear the resulting rate-limit
+# state before applying the migrated configuration.
+systemctl --user reset-failed ntfy.service ntfy-app.service
 if systemctl --user is-active --quiet ntfy.service; then
     systemctl --user restart ntfy-app.service
 else

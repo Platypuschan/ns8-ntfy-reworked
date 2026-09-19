@@ -25,6 +25,7 @@ MIGRATION_ACTION = (
 )
 DISCOVER_SMARTHOST = REPOSITORY_ROOT / "imageroot/bin/discover-smarthost"
 SERVICE_UNIT = REPOSITORY_ROOT / "imageroot/systemd/user/ntfy-app.service"
+START_SERVICES = REPOSITORY_ROOT / "imageroot/actions/configure-module/80start_services"
 
 
 class FakeAgent(types.ModuleType):
@@ -307,6 +308,16 @@ class ServiceUnitTests(unittest.TestCase):
 
         self.assertIn("--volume ./:/var/lib/ntfy:Z", unit)
         self.assertIn("--volume ./config:/etc/ntfy:ro,Z", unit)
+
+
+class StartServicesActionTests(unittest.TestCase):
+    def test_clears_start_limit_before_restarting_services(self):
+        script = START_SERVICES.read_text(encoding="utf-8")
+
+        reset = "systemctl --user reset-failed ntfy.service ntfy-app.service"
+        restart = "systemctl --user restart ntfy-app.service"
+        self.assertIn(reset, script)
+        self.assertLess(script.index(reset), script.index(restart))
 
 
 if __name__ == "__main__":
