@@ -3,7 +3,8 @@ Library    SSHLibrary
 Library    String
 
 *** Variables ***
-${IMAGE_URL}         ghcr.io/platypuschan/ntfy:latest
+${IMAGE_URL}         ghcr.io/platypuschan/ntfy-reworked:latest
+# The update scenario installs the original NS8 module before migrating to this fork.
 ${BASELINE_IMAGE}    ghcr.io/geniusdynamics/ntfy:latest
 ${SCENARIO}          install
 ${HOST}              ntfy.test
