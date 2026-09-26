@@ -11,7 +11,7 @@ set -e
 # Prepare variables for later use
 images=()
 # The image will be pushed to GitHub container registry
-repobase="${REPOBASE:-ghcr.io/geniusdynamics}"
+repobase="${REPOBASE:-ghcr.io/platypuschan}"
 # Keep the published image name aligned with module-info.yml, which derives
 # "ntfy-reworked" from the repository name "ns8-ntfy-reworked".
 reponame="ntfy-reworked"
