@@ -1,19 +1,23 @@
 {
-  "name": "ntfy",
+  "name": "ntfy Reworked",
   "description": {
-    "en": "Your locally hosted one-stop-shop for all your PDF needs.."
+    "en": "Self-hosted push notifications for NethServer 8 with customizable server configuration.",
+    "de": "Selbst gehostete Push-Benachrichtigungen für NethServer 8 mit anpassbarer Serverkonfiguration."
   },
   "categories": ["communication"],
   "authors": [
     {
       "name": "Martin Bhuong",
       "email": "martin@genius.ke"
+    },
+    {
+      "name": "Platypuschan"
     }
   ],
   "docs": {
     "documentation_url": "https://docs.ntfy.sh/",
-    "bug_url": "https://github.com/geniusdynamics/ns8-ntfy/issues",
-    "code_url": "https://github.com/geniusdynamics/ns8-ntfy"
+    "bug_url": "https://github.com/Platypuschan/ns8-ntfy-reworked/issues",
+    "code_url": "https://github.com/Platypuschan/ns8-ntfy-reworked"
   },
-  "source": "ghcr.io/geniusdynamics/ntfy"
+  "source": "ghcr.io/platypuschan/ntfy-reworked"
 }
