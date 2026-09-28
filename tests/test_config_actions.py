@@ -24,6 +24,24 @@ MIGRATION_ACTION = (
     REPOSITORY_ROOT / "imageroot/update-module.d/10migrate_server_config"
 )
 DISCOVER_SMARTHOST = REPOSITORY_ROOT / "imageroot/bin/discover-smarthost"
+VALIDATE_ACTION = (
+    REPOSITORY_ROOT
+    / "imageroot/actions/configure-module/02validate_server_config"
+)
+DATA_MIGRATION = (
+    REPOSITORY_ROOT / "imageroot/update-module.d/15migrate_data_volume"
+)
+STATE_INCLUDE = REPOSITORY_ROOT / "imageroot/etc/state-include.conf"
+PYPKG = REPOSITORY_ROOT / "imageroot/pypkg"
+
+sys.path.insert(0, str(PYPKG))
+import ntfy_config  # noqa: E402
+
+try:
+    import yaml  # noqa: F401
+    HAVE_YAML = True
+except ImportError:
+    HAVE_YAML = False
 SERVICE_UNIT = REPOSITORY_ROOT / "imageroot/systemd/user/ntfy-app.service"
 START_SERVICES = REPOSITORY_ROOT / "imageroot/actions/configure-module/80start_services"
 
@@ -33,6 +51,8 @@ class FakeAgent(types.ModuleType):
         super().__init__("agent")
         self.unset_variables = []
         self.smarthost = smarthost
+        self.status = None
+        self.weights = {}
 
     def unset_env(self, variable):
         self.unset_variables.append(variable)
@@ -42,7 +62,15 @@ class FakeAgent(types.ModuleType):
         return kwargs
 
     def get_smarthost_settings(self, _connection):
+        if self.smarthost is None:
+            raise AssertionError("Redis must not be queried")
         return self.smarthost
+
+    def set_status(self, status):
+        self.status = status
+
+    def set_weight(self, step, weight):
+        self.weights[step] = weight
 
 
 @contextlib.contextmanager
@@ -134,6 +162,41 @@ class ConfigureActionTests(unittest.TestCase):
             )
 
 
+@unittest.skipUnless(HAVE_YAML, "PyYAML is provided by the NS8 agent")
+class ValidateServerConfigActionTests(unittest.TestCase):
+    def run_validation(self, server_config):
+        payload = json.dumps({
+            "host": "ntfy.example.org",
+            "server_config": server_config,
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            with action_environment(directory, stdin=payload) as (agent, output):
+                try:
+                    runpy.run_path(str(VALIDATE_ACTION), run_name="__main__")
+                except SystemExit as raised:
+                    return agent, output.getvalue(), raised.code
+                return agent, output.getvalue(), 0
+
+    def test_accepts_mapping_and_empty_config(self):
+        for server_config in ("base-url: https://ntfy.example.org\n", ""):
+            with self.subTest(server_config=server_config):
+                agent, output, code = self.run_validation(server_config)
+                self.assertEqual(code, 0)
+                self.assertIsNone(agent.status)
+                self.assertEqual(output, "")
+
+    def test_rejects_invalid_yaml_and_non_mapping(self):
+        for server_config in ("base-url: [unclosed\n", "- a\n- b\n", "just text"):
+            with self.subTest(server_config=server_config):
+                agent, output, code = self.run_validation(server_config)
+                self.assertNotEqual(code, 0)
+                self.assertEqual(agent.status, "validation-failed")
+                self.assertEqual(
+                    json.loads(output)[0]["error"],
+                    "invalid_server_config",
+                )
+
+
 class GetConfigurationActionTests(unittest.TestCase):
     def test_returns_server_yml_without_modifying_it(self):
         environment = {
@@ -161,6 +224,26 @@ class GetConfigurationActionTests(unittest.TestCase):
             self.assertTrue(result["http2https"])
             self.assertFalse(result["lets_encrypt"])
 
+    def test_returns_quoted_defaults_without_server_yml(self):
+        environment = {"TRAEFIK_HOST": "ntfy.example.org"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            with action_environment(directory, environment) as (_, output):
+                runpy.run_path(
+                    str(GET_CONFIGURATION_ACTION),
+                    run_name="__main__",
+                )
+                result = json.loads(output.getvalue())
+
+        self.assertEqual(
+            result["server_config"],
+            ntfy_config.default_config("ntfy.example.org"),
+        )
+        self.assertIn(
+            'base-url: "https://ntfy.example.org"',
+            result["server_config"],
+        )
+
 
 class MigrationActionTests(unittest.TestCase):
     def test_does_not_overwrite_an_existing_server_yml(self):
@@ -183,6 +266,100 @@ class MigrationActionTests(unittest.TestCase):
                 "keep: this\n",
             )
             self.assertIn("NTFY_BASE_URL", agent.unset_variables)
+
+    def test_writes_defaults_without_legacy_values(self):
+        environment = {"TRAEFIK_HOST": "ntfy.example.org"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            with action_environment(directory, environment):
+                runpy.run_path(str(MIGRATION_ACTION), run_name="__main__")
+
+            config_path = Path(directory) / "config/server.yml"
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                ntfy_config.default_config("ntfy.example.org"),
+            )
+            self.assertEqual(stat.S_IMODE(config_path.stat().st_mode), 0o600)
+
+
+class DataMigrationTests(unittest.TestCase):
+    def test_moves_legacy_data_into_volume_and_keeps_agent_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state"
+            volume = Path(directory) / "volume"
+            (state / "config").mkdir(parents=True)
+            volume.mkdir()
+            (state / "config/server.yml").write_text(
+                'cache-file: "/var/lib/ntfy/custom/messages.db"\n'
+                "auth-file: /var/lib/ntfy/users.db # comment\n",
+                encoding="utf-8",
+            )
+            for name in ("environment", "smarthost.env", "cache.db",
+                         "cache.db-wal", "users.db", "unrelated.txt"):
+                (state / name).write_text(name, encoding="utf-8")
+            (state / "attachments").mkdir()
+            (state / "attachments/abc").write_text("x", encoding="utf-8")
+            (state / "custom").mkdir()
+            (state / "custom/messages.db").write_text("m", encoding="utf-8")
+
+            commands = []
+
+            def fake_run(command, **kwargs):
+                commands.append(tuple(command))
+                if command[:3] == ("podman", "volume", "inspect"):
+                    return types.SimpleNamespace(
+                        returncode=0,
+                        stdout=str(volume) + "\n",
+                    )
+                if command[0] == "mv":
+                    os.rename(command[2], command[3])
+                if "is-active" in command:
+                    return types.SimpleNamespace(returncode=0, stdout="")
+                return types.SimpleNamespace(returncode=0, stdout="")
+
+            with action_environment(state):
+                with patch("subprocess.run", side_effect=fake_run):
+                    runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
+
+            for name in ("cache.db", "cache.db-wal", "users.db",
+                         "attachments/abc", "custom/messages.db"):
+                self.assertTrue((volume / name).exists(), name)
+                self.assertFalse((state / name).exists(), name)
+            for name in ("environment", "smarthost.env", "config/server.yml",
+                         "unrelated.txt"):
+                self.assertTrue((state / name).exists(), name)
+            self.assertIn(("systemctl", "--user", "stop", "ntfy.service"), commands)
+            self.assertIn(("systemctl", "--user", "start", "ntfy.service"), commands)
+
+    def test_does_nothing_without_legacy_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with action_environment(directory):
+                with patch("subprocess.run") as run:
+                    with self.assertRaises(SystemExit) as raised:
+                        runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
+            self.assertEqual(raised.exception.code, 0)
+            run.assert_not_called()
+
+
+class BackupIncludeTests(unittest.TestCase):
+    def test_backup_covers_data_volume_and_server_yml(self):
+        lines = [
+            line.strip()
+            for line in STATE_INCLUDE.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        # NS8 ignores patterns that do not start with state/ or volumes/.
+        for line in lines:
+            self.assertTrue(line.startswith(("state/", "volumes/")), line)
+        self.assertIn("volumes/" + ntfy_config.DATA_VOLUME, lines)
+        self.assertIn("state/" + ntfy_config.CONFIG_PATH, lines)
+
+    def test_default_data_paths_are_inside_the_data_volume(self):
+        config = ntfy_config.default_config("ntfy.example.org")
+        for option in ntfy_config.DATA_PATH_OPTIONS:
+            value = ntfy_config.root_scalar(config, option)
+            if value:
+                self.assertTrue(value.startswith(ntfy_config.DATA_MOUNT + "/"))
 
 
 class DiscoverSmarthostTests(unittest.TestCase):
@@ -302,12 +479,100 @@ class DiscoverSmarthostTests(unittest.TestCase):
                     )
 
 
+    def test_server_yml_smtp_relay_takes_precedence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_directory = Path(directory) / "config"
+            config_directory.mkdir()
+            (config_directory / "server.yml").write_text(
+                'smtp-sender-addr: "mail.example.org:587"\n',
+                encoding="utf-8",
+            )
+            # smarthost=None makes the fake agent fail if Redis is queried
+            with action_environment(directory):
+                with self.assertRaises(SystemExit) as raised:
+                    runpy.run_path(str(DISCOVER_SMARTHOST), run_name="__main__")
+
+            self.assertEqual(raised.exception.code, 0)
+            self.assertEqual(
+                (Path(directory) / "smarthost.env").read_text(encoding="utf-8"),
+                "",
+            )
+
+    def test_empty_smtp_sender_addr_does_not_disable_smarthost(self):
+        smarthost = {
+            "enabled": True,
+            "host": "smtp.example.org",
+            "port": 587,
+            "encrypt_smtp": "starttls",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            config_directory = Path(directory) / "config"
+            config_directory.mkdir()
+            (config_directory / "server.yml").write_text(
+                'smtp-sender-addr:\nsmtp-sender-from: ""\n',
+                encoding="utf-8",
+            )
+            environment = {"TRAEFIK_HOST": "ntfy.example.org"}
+            with action_environment(directory, environment, smarthost=smarthost):
+                runpy.run_path(str(DISCOVER_SMARTHOST), run_name="__main__")
+
+            environment_file = (Path(directory) / "smarthost.env").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                "NTFY_SMTP_SENDER_ADDR=smtp.example.org:587\n",
+                environment_file,
+            )
+            self.assertIn(
+                "NTFY_SMTP_SENDER_FROM=no-reply@ntfy.example.org\n",
+                environment_file,
+            )
+
+    def test_nested_sender_from_is_not_a_root_key(self):
+        smarthost = {
+            "enabled": True,
+            "host": "smtp.example.org",
+            "username": "relay-user",
+            "encrypt_smtp": "none",
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            config_directory = Path(directory) / "config"
+            config_directory.mkdir()
+            (config_directory / "server.yml").write_text(
+                'other:\n  smtp-sender-from: "nested@example.org"\n',
+                encoding="utf-8",
+            )
+            environment = {"TRAEFIK_HOST": "ntfy.example.org"}
+            with action_environment(directory, environment, smarthost=smarthost):
+                runpy.run_path(str(DISCOVER_SMARTHOST), run_name="__main__")
+
+            environment_file = (Path(directory) / "smarthost.env").read_text(
+                encoding="utf-8"
+            )
+            # a missing port falls back to the SMTP default
+            self.assertIn(
+                "NTFY_SMTP_SENDER_ADDR=smtp.example.org:25\n",
+                environment_file,
+            )
+            self.assertIn(
+                "NTFY_SMTP_SENDER_FROM=no-reply@ntfy.example.org\n",
+                environment_file,
+            )
+
+
 class ServiceUnitTests(unittest.TestCase):
-    def test_bind_mounts_have_private_selinux_labels(self):
+    def test_data_volume_and_config_mounts_have_private_selinux_labels(self):
         unit = SERVICE_UNIT.read_text(encoding="utf-8")
 
-        self.assertIn("--volume ./:/var/lib/ntfy:Z", unit)
+        self.assertIn(
+            f"--volume {ntfy_config.DATA_VOLUME}:{ntfy_config.DATA_MOUNT}:Z",
+            unit,
+        )
         self.assertIn("--volume ./config:/etc/ntfy:ro,Z", unit)
+        # The state directory holds agent files and must not be exposed
+        self.assertNotIn("--volume ./:", unit)
 
 
 class StartServicesActionTests(unittest.TestCase):

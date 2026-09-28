@@ -8,128 +8,26 @@
 import json
 import os
 import sys
-import tempfile
 import agent
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "pypkg"))
+import ntfy_config
 
 # Try to parse the stdin as JSON.
 # If parsing fails, output everything to stderr
 data = json.load(sys.stdin)
 
-config_directory = "config"
-config_path = os.path.join(config_directory, "server.yml")
-
-
-def yaml_string(value):
-    """Return a YAML-compatible, safely quoted string."""
-    return json.dumps(str(value), ensure_ascii=False)
-
-
-def legacy_server_config(host):
-    """Build server.yml when upgrading an installation using NTFY_* vars."""
-    string_options = (
-        ("base-url", "NTFY_BASE_URL"),
-        ("auth-default-access", "NTFY_AUTH_DEFAULT_ACCESS"),
-        ("upstream-base-url", "NTFY_UPSTREAM_BASE_URL"),
-        ("upstream-access-token", "NTFY_UPSTREAM_ACCESS_TOKEN"),
-        ("web-push-email-address", "NTFY_WEB_PUSH_EMAIL_ADDRESS"),
-        ("cache-file", "NTFY_CACHE_FILE"),
-        ("attachment-cache-dir", "NTFY_ATTACHMENT_CACHE_DIR"),
-        ("auth-file", "NTFY_AUTH_FILE"),
-        ("web-push-file", "NTFY_WEB_PUSH_FILE"),
-        ("web-push-public-key", "NTFY_WEB_PUSH_PUBLIC_KEY"),
-        ("web-push-private-key", "NTFY_WEB_PUSH_PRIVATE_KEY"),
-    )
-    boolean_options = (
-        ("enable-login", "NTFY_ENABLE_LOGIN"),
-        ("enable-signup", "NTFY_ENABLE_SIGNUP"),
-    )
-
-    values = []
-    for option, variable in string_options:
-        value = os.getenv(variable, "").strip()
-        if value and value.lower() != "none":
-            values.append(f"{option}: {yaml_string(value)}")
-
-    for option, variable in boolean_options:
-        value = os.getenv(variable, "").strip().lower()
-        if value in ("true", "false"):
-            values.append(f"{option}: {value}")
-
-    # Older releases wrote this misspelled variable.
-    if not os.getenv("NTFY_UPSTREAM_BASE_URL"):
-        value = os.getenv("NTFY_UPSTREAM_BASE_URE", "").strip()
-        if value and value.lower() != "none":
-            values.append(f"upstream-base-url: {yaml_string(value)}")
-
-    if values:
-        return "\n".join(values) + "\n"
-
-    return "\n".join((
-        f"base-url: {yaml_string('https://' + host)}",
-        'cache-file: "/var/lib/ntfy/cache.db"',
-        'attachment-cache-dir: "/var/lib/ntfy/attachments"',
-        'auth-file: "/var/lib/ntfy/auth.db"',
-        'auth-default-access: "deny-all"',
-        "enable-login: true",
-        "enable-signup: false",
-        "",
-    ))
-
-
-def write_server_config(content):
-    """Atomically persist server.yml with permissions suitable for secrets."""
-    os.makedirs(config_directory, mode=0o700, exist_ok=True)
-    os.chmod(config_directory, 0o700)
-    fd, temporary_path = tempfile.mkstemp(
-        dir=config_directory,
-        prefix=".server.yml.",
-        text=True,
-    )
-    try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as stream:
-            stream.write(content)
-            if content and not content.endswith("\n"):
-                stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary_path, config_path)
-    except Exception:
-        try:
-            os.unlink(temporary_path)
-        except FileNotFoundError:
-            pass
-        raise
-
-
 server_config = data.get("server_config")
 if server_config is not None:
-    write_server_config(server_config)
-elif not os.path.exists(config_path):
-    write_server_config(legacy_server_config(data.get("host", "")))
+    ntfy_config.write_server_config(server_config)
+elif not os.path.exists(ntfy_config.CONFIG_PATH):
+    ntfy_config.write_server_config(ntfy_config.initial_config(data.get("host", "")))
 else:
-    os.chmod(config_directory, 0o700)
-    os.chmod(config_path, 0o600)
+    ntfy_config.secure_server_config()
 
 # server.yml is the source for user-managed ntfy application settings. Proxy
 # integration and the optional NS8 smarthost are injected at runtime by the
 # systemd service. Remove variables written by older module versions so they
 # cannot unexpectedly override the file.
-for variable in (
-    "NTFY_BASE_URL",
-    "NTFY_AUTH_DEFAULT_ACCESS",
-    "NTFY_BEHIND_PROXY",
-    "NTFY_ENABLE_LOGIN",
-    "NTFY_ENABLE_SIGNUP",
-    "NTFY_UPSTREAM_BASE_URE",
-    "NTFY_UPSTREAM_BASE_URL",
-    "NTFY_UPSTREAM_ACCESS_TOKEN",
-    "NTFY_WEB_PUSH_EMAIL_ADDRESS",
-    "NTFY_CACHE_FILE",
-    "NTFY_ATTACHMENT_CACHE_DIR",
-    "NTFY_AUTH_FILE",
-    "NTFY_WEB_PUSH_FILE",
-    "NTFY_WEB_PUSH_PUBLIC_KEY",
-    "NTFY_WEB_PUSH_PRIVATE_KEY",
-):
+for variable in ntfy_config.LEGACY_VARIABLES:
     agent.unset_env(variable)

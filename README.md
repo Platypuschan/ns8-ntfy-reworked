@@ -2,7 +2,8 @@
 
 This repository packages [ntfy](https://ntfy.sh/) for NethServer 8. The module
 provides a Traefik route, an editor for ntfy's `server.yml`, backup and restore,
-and optional outgoing mail through the NS8 smarthost.
+and optional outgoing mail through the NS8 smarthost. It runs the
+`docker.io/binwiederhier/ntfy:v2.28.0` image.
 
 ## Install
 
@@ -57,12 +58,30 @@ The command starts ntfy, creates its Traefik route and saves `server.yml` in
 `state/config/server.yml` with mode `0600`.
 
 The config directory is mounted read-only at `/etc/ntfy` inside the ntfy
-container. The configuration file is included in module backups. Invalid YAML
-will prevent ntfy from starting; inspect the module service log after changing
-advanced settings.
+container. `configure-module` rejects a `server_config` that is not valid YAML
+or whose top level is not a mapping, with the `invalid_server_config`
+validation error. Invalid ntfy option values are only detected by ntfy itself;
+inspect the module service log after changing advanced settings.
+
+## Data and backup
+
+ntfy data (message cache, user and ACL database, web push database and
+attachments) is stored in the `ntfy-data` Podman volume, mounted at
+`/var/lib/ntfy`. Keep the `cache-file`, `auth-file`, `web-push-file` and
+`attachment-cache-dir` paths below `/var/lib/ntfy`, otherwise the data is
+neither persistent nor backed up.
+
+Module backups include the `ntfy-data` volume and `state/config/server.yml`.
+The volume is copied while ntfy is running. SQLite databases that are written
+during the backup may therefore be restored in a slightly older or partially
+checkpointed state.
 
 When upgrading from an older release, the update action converts existing
 `NTFY_*` values to `server.yml` once and then removes those legacy variables.
+Releases before this change stored ntfy data directly in the state directory,
+where it was not backed up. The update stops ntfy briefly and moves those files
+and directories into the `ntfy-data` volume. Existing files in the volume are
+never overwritten.
 
 ## Reverse proxy
 
@@ -125,6 +144,9 @@ injects them as `NTFY_SMTP_SENDER_ADDR`, `NTFY_SMTP_SENDER_USER` and
 are applied without editing `server.yml`. The generated credential file has
 mode `0600` and is not included in module backups.
 
+If `server.yml` defines a top-level `smtp-sender-addr`, the NS8 smarthost is
+ignored and all `smtp-sender-*` settings come from `server.yml`.
+
 NS8 does not define a sender email address. If `smtp-sender-from` exists in
 `server.yml`, the module preserves it. Otherwise it uses an email-shaped SMTP
 username, or finally `no-reply@<ntfy-host>`.
@@ -161,6 +183,13 @@ The test scripts accept an NS8 leader node address and a module image URL:
 ./test-module-update.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
 ```
 
-The update test starts with the original NS8 ntfy module and then upgrades to
-the image supplied here. It intentionally uses the upstream image as its
-baseline.
+The update test starts with the original NS8 ntfy module
+(`ghcr.io/geniusdynamics/ntfy:1.0.0`) and then upgrades to the image supplied
+here, including the migration of legacy data into the `ntfy-data` volume.
+
+Unit tests for actions and helpers need PyYAML, which the NS8 agent provides:
+
+```bash
+python3 -m pip install PyYAML==6.0.3
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```

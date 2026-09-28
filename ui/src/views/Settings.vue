@@ -63,7 +63,7 @@
             </cv-toggle>
             <!-- advanced options -->
             <cv-accordion ref="accordion" class="maxwidth mg-bottom">
-              <cv-accordion-item :open="toggleAccordion[0]">
+              <cv-accordion-item :open="isAdvancedOpen">
                 <template slot="title">{{ $t("settings.advanced") }}</template>
                 <template slot="content">
                   <cv-text-area
@@ -138,6 +138,7 @@ export default {
       isLetsEncryptEnabled: false,
       isHttpToHttpsEnabled: true,
       serverConfig: "",
+      isAdvancedOpen: false,
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -260,8 +261,17 @@ export default {
         // set i18n error message
         this.error[param] = this.$t("settings." + validationError.error);
 
+        if (param === "server_config") {
+          // show the server.yml editor, which is inside a collapsed accordion;
+          // toggle the prop so it reopens even if the user closed it before
+          this.isAdvancedOpen = false;
+          this.$nextTick(() => {
+            this.isAdvancedOpen = true;
+          });
+        }
+
         if (!focusAlreadySet) {
-          this.focusElement(param);
+          this.$nextTick(() => this.focusElement(param));
           focusAlreadySet = true;
         }
       }

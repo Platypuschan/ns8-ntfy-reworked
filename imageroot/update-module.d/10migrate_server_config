@@ -5,117 +5,21 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-import json
 import os
-import tempfile
+import sys
 
 import agent
 
-
-CONFIG_DIRECTORY = "config"
-CONFIG_PATH = os.path.join(CONFIG_DIRECTORY, "server.yml")
-LEGACY_VARIABLES = (
-    "NTFY_BASE_URL",
-    "NTFY_AUTH_DEFAULT_ACCESS",
-    "NTFY_BEHIND_PROXY",
-    "NTFY_ENABLE_LOGIN",
-    "NTFY_ENABLE_SIGNUP",
-    "NTFY_UPSTREAM_BASE_URE",
-    "NTFY_UPSTREAM_BASE_URL",
-    "NTFY_UPSTREAM_ACCESS_TOKEN",
-    "NTFY_WEB_PUSH_EMAIL_ADDRESS",
-    "NTFY_CACHE_FILE",
-    "NTFY_ATTACHMENT_CACHE_DIR",
-    "NTFY_AUTH_FILE",
-    "NTFY_WEB_PUSH_FILE",
-    "NTFY_WEB_PUSH_PUBLIC_KEY",
-    "NTFY_WEB_PUSH_PRIVATE_KEY",
-)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "pypkg"))
+import ntfy_config
 
 
-def yaml_string(value):
-    return json.dumps(str(value), ensure_ascii=False)
-
-
-def build_config():
-    string_options = (
-        ("base-url", "NTFY_BASE_URL"),
-        ("auth-default-access", "NTFY_AUTH_DEFAULT_ACCESS"),
-        ("upstream-base-url", "NTFY_UPSTREAM_BASE_URL"),
-        ("upstream-access-token", "NTFY_UPSTREAM_ACCESS_TOKEN"),
-        ("web-push-email-address", "NTFY_WEB_PUSH_EMAIL_ADDRESS"),
-        ("cache-file", "NTFY_CACHE_FILE"),
-        ("attachment-cache-dir", "NTFY_ATTACHMENT_CACHE_DIR"),
-        ("auth-file", "NTFY_AUTH_FILE"),
-        ("web-push-file", "NTFY_WEB_PUSH_FILE"),
-        ("web-push-public-key", "NTFY_WEB_PUSH_PUBLIC_KEY"),
-        ("web-push-private-key", "NTFY_WEB_PUSH_PRIVATE_KEY"),
+if not os.path.exists(ntfy_config.CONFIG_PATH):
+    ntfy_config.write_server_config(
+        ntfy_config.initial_config(os.getenv("TRAEFIK_HOST", ""))
     )
-    boolean_options = (
-        ("enable-login", "NTFY_ENABLE_LOGIN"),
-        ("enable-signup", "NTFY_ENABLE_SIGNUP"),
-    )
-    values = []
-
-    for option, variable in string_options:
-        value = os.getenv(variable, "").strip()
-        if value and value.lower() != "none":
-            values.append(f"{option}: {yaml_string(value)}")
-
-    for option, variable in boolean_options:
-        value = os.getenv(variable, "").strip().lower()
-        if value in ("true", "false"):
-            values.append(f"{option}: {value}")
-
-    if not os.getenv("NTFY_UPSTREAM_BASE_URL"):
-        value = os.getenv("NTFY_UPSTREAM_BASE_URE", "").strip()
-        if value and value.lower() != "none":
-            values.append(f"upstream-base-url: {yaml_string(value)}")
-
-    if values:
-        return "\n".join(values) + "\n"
-
-    host = os.getenv("TRAEFIK_HOST", "")
-    return "\n".join((
-        f"base-url: {yaml_string('https://' + host)}",
-        'cache-file: "/var/lib/ntfy/cache.db"',
-        'attachment-cache-dir: "/var/lib/ntfy/attachments"',
-        'auth-file: "/var/lib/ntfy/auth.db"',
-        'auth-default-access: "deny-all"',
-        "enable-login: true",
-        "enable-signup: false",
-        "",
-    ))
-
-
-def write_config(content):
-    os.makedirs(CONFIG_DIRECTORY, mode=0o700, exist_ok=True)
-    os.chmod(CONFIG_DIRECTORY, 0o700)
-    fd, temporary_path = tempfile.mkstemp(
-        dir=CONFIG_DIRECTORY,
-        prefix=".server.yml.",
-        text=True,
-    )
-    try:
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as stream:
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary_path, CONFIG_PATH)
-    except Exception:
-        try:
-            os.unlink(temporary_path)
-        except FileNotFoundError:
-            pass
-        raise
-
-
-if not os.path.exists(CONFIG_PATH):
-    write_config(build_config())
 else:
-    os.chmod(CONFIG_DIRECTORY, 0o700)
-    os.chmod(CONFIG_PATH, 0o600)
+    ntfy_config.secure_server_config()
 
-for variable in LEGACY_VARIABLES:
+for variable in ntfy_config.LEGACY_VARIABLES:
     agent.unset_env(variable)

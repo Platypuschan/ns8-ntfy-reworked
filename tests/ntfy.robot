@@ -5,7 +5,7 @@ Library    String
 *** Variables ***
 ${IMAGE_URL}         ghcr.io/platypuschan/ntfy-reworked:latest
 # The update scenario installs the original NS8 module before migrating to this fork.
-${BASELINE_IMAGE}    ghcr.io/geniusdynamics/ntfy:latest
+${BASELINE_IMAGE}    ghcr.io/geniusdynamics/ntfy:1.0.0
 ${SCENARIO}          install
 ${HOST}              ntfy.test
 ${module_id}         ${EMPTY}
@@ -58,6 +58,10 @@ Configure initial module
         ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
         ...    return_rc=True
         Should Be Equal As Integers    ${rc}    0    baseline configure-module failed: ${output}
+        # The baseline stores ntfy data directly in the state directory.
+        ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'mkdir -p attachments && echo legacy > attachments/ci-marker'
+        ...    return_rc=True    return_stdout=False
+        Should Be Equal As Integers    ${rc}    0
     ELSE
         Configure current module with test server.yml
     END
@@ -120,6 +124,23 @@ Publish and subscribe through Traefik
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0    subscribe failed: ${output}
     Should Contain    ${output}    "message":"${message}"
+
+Check ntfy data is stored in the backed up volume
+    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'test -f "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/cache.db"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    cache.db is not in the ntfy-data volume
+    ${rc} =    Execute Command    runagent -m ${module_id} test ! -e cache.db
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    cache.db is still in the state directory
+    ${include} =    Execute Command    runagent -m ${module_id} sh -c 'cat ../etc/state-include.conf'
+    Should Contain    ${include}    volumes/ntfy-data
+    Should Contain    ${include}    state/config/server.yml
+    IF    r'${SCENARIO}' == 'update'
+        ${output}    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/attachments/ci-marker"'
+        ...    return_rc=True
+        Should Be Equal As Integers    ${rc}    0    legacy attachments were not migrated: ${output}
+        Should Be Equal    ${output}    legacy
+    END
 
 Remove module
     ${rc} =    Execute Command    remove-module --no-preserve ${module_id}
