@@ -63,7 +63,10 @@
             </cv-toggle>
             <!-- advanced options -->
             <cv-accordion ref="accordion" class="maxwidth mg-bottom">
-              <cv-accordion-item :open="isAdvancedOpen">
+              <cv-accordion-item
+                :key="advancedAccordionKey"
+                :open="isAdvancedOpen"
+              >
                 <template slot="title">{{ $t("settings.advanced") }}</template>
                 <template slot="content">
                   <cv-text-area
@@ -139,6 +142,7 @@ export default {
       isHttpToHttpsEnabled: true,
       serverConfig: "",
       isAdvancedOpen: false,
+      advancedAccordionKey: 0,
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -262,12 +266,10 @@ export default {
         this.error[param] = this.$t("settings." + validationError.error);
 
         if (param === "server_config") {
-          // show the server.yml editor, which is inside a collapsed accordion;
-          // toggle the prop so it reopens even if the user closed it before
-          this.isAdvancedOpen = false;
-          this.$nextTick(() => {
-            this.isAdvancedOpen = true;
-          });
+          // Carbon keeps its own open state after a manual close. Remount the
+          // item on every YAML error so repeated failures reveal the editor.
+          this.isAdvancedOpen = true;
+          this.advancedAccordionKey += 1;
         }
 
         if (!focusAlreadySet) {

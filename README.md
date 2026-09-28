@@ -71,10 +71,13 @@ attachments) is stored in the `ntfy-data` Podman volume, mounted at
 `attachment-cache-dir` paths below `/var/lib/ntfy`, otherwise the data is
 neither persistent nor backed up.
 
-Module backups include the `ntfy-data` volume and `state/config/server.yml`.
-The volume is copied while ntfy is running. SQLite databases that are written
-during the backup may therefore be restored in a slightly older or partially
-checkpointed state.
+Before a module backup, ntfy is stopped and its closed SQLite databases,
+attachments and `server.yml` are copied into a temporary snapshot within the
+`ntfy-data` volume. ntfy is started again before Restic uploads that snapshot.
+After a successful backup, the temporary copy is removed. A failed upload can
+leave the copy in the volume until the next backup, but does not leave ntfy
+stopped. Allow enough free space in the volume for a second copy of its data.
+Restores of backups made before this snapshot change remain supported.
 
 When upgrading from an older release, the update action converts existing
 `NTFY_*` values to `server.yml` once and then removes those legacy variables.

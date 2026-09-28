@@ -373,7 +373,7 @@ class DataMigrationTests(unittest.TestCase):
 
 
 class BackupIncludeTests(unittest.TestCase):
-    def test_backup_covers_data_volume_and_server_yml(self):
+    def test_backup_uses_the_stopped_service_snapshot(self):
         lines = [
             line.strip()
             for line in STATE_INCLUDE.read_text(encoding="utf-8").splitlines()
@@ -382,8 +382,12 @@ class BackupIncludeTests(unittest.TestCase):
         # NS8 ignores patterns that do not start with state/ or volumes/.
         for line in lines:
             self.assertTrue(line.startswith(("state/", "volumes/")), line)
-        self.assertIn("volumes/" + ntfy_config.DATA_VOLUME, lines)
-        self.assertIn("state/" + ntfy_config.CONFIG_PATH, lines)
+        self.assertIn(
+            "volumes/" + ntfy_config.DATA_VOLUME + "/.ntfy-backup-snapshot",
+            lines,
+        )
+        self.assertNotIn("volumes/" + ntfy_config.DATA_VOLUME, lines)
+        self.assertNotIn("state/" + ntfy_config.CONFIG_PATH, lines)
 
     def test_default_data_paths_are_inside_the_data_volume(self):
         config = ntfy_config.default_config("ntfy.example.org")

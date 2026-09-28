@@ -136,14 +136,30 @@ Check ntfy data is stored in the backed up volume
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0    cache.db is still in the state directory
     ${include} =    Execute Command    runagent -m ${module_id} sh -c 'cat ../etc/state-include.conf'
-    Should Contain    ${include}    volumes/ntfy-data
-    Should Contain    ${include}    state/config/server.yml
+    Should Contain    ${include}    volumes/ntfy-data/.ntfy-backup-snapshot
     IF    r'${SCENARIO}' == 'update'
         ${output}    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/attachments/ci-marker"'
         ...    return_rc=True
         Should Be Equal As Integers    ${rc}    0    legacy attachments were not migrated: ${output}
         Should Be Equal    ${output}    legacy
     END
+
+Check backup snapshot and service restart
+    ${rc} =    Execute Command    runagent -m ${module_id} module-dump-state
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    ntfy snapshot failed
+    ${snapshot} =    Execute Command    runagent -m ${module_id} sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/.ntfy-backup-snapshot/server.yml"'
+    Should Contain    ${snapshot}    cache-file: "/var/lib/ntfy/cache.db"
+    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'test -f "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/.ntfy-backup-snapshot/data/cache.db"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    snapshot has no SQLite database
+    Wait until ntfy is healthy
+    ${rc} =    Execute Command    runagent -m ${module_id} module-cleanup-state
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    snapshot cleanup failed
+    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'test ! -e "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/.ntfy-backup-snapshot"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    temporary snapshot remains after cleanup
 
 Remove module
     ${rc} =    Execute Command    remove-module --no-preserve ${module_id}
