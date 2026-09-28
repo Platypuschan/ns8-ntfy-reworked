@@ -70,5 +70,11 @@ try:
         print(f"Moved {entry} to volume {ntfy_config.DATA_VOLUME}", file=sys.stderr)
 finally:
     if was_active:
-        systemctl("daemon-reload")
-        systemctl("start", "ntfy.service")
+        systemctl("daemon-reload", check=False)
+        # A service updated from the original module may have crash-looped
+        # on invalid legacy NTFY_* values and hit its start rate limit.
+        systemctl("reset-failed", "ntfy.service", "ntfy-app.service", check=False)
+        # The data is already in place: a start failure must not fail the
+        # update, configure-module and later restarts start ntfy again.
+        if systemctl("start", "ntfy.service", check=False).returncode != 0:
+            print("<4>ntfy.service did not start after the data migration", file=sys.stderr)

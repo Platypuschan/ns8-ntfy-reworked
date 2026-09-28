@@ -72,6 +72,9 @@ Update module and migrate legacy configuration
         ${output}    ${rc} =    Execute Command    api-cli run update-module --data '{"force":true,"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
         ...    return_rc=True
         Should Be Equal As Integers    ${rc}    0    update-module ${IMAGE_URL} failed: ${output}
+        # update-module does not fail the task when an update-module.d step fails
+        ${journal} =    Execute Command    journalctl -q --no-pager SYSLOG_IDENTIFIER=agent@${module_id}
+        Should Not Contain    ${journal}    has failed    an update-module.d step failed
 
         ${payload} =    Evaluate    json.dumps({"host": "${HOST}", "http2https": False, "lets_encrypt": False})    modules=json
         ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'

@@ -4,6 +4,7 @@ import json
 import os
 import runpy
 import stat
+import subprocess
 import sys
 import tempfile
 import types
@@ -330,6 +331,36 @@ class DataMigrationTests(unittest.TestCase):
                 self.assertTrue((state / name).exists(), name)
             self.assertIn(("systemctl", "--user", "stop", "ntfy.service"), commands)
             self.assertIn(("systemctl", "--user", "start", "ntfy.service"), commands)
+
+    def test_start_failure_after_move_does_not_fail_the_update(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state"
+            volume = Path(directory) / "volume"
+            state.mkdir()
+            volume.mkdir()
+            (state / "cache.db").write_text("c", encoding="utf-8")
+            commands = []
+
+            def fake_run(command, check=False, **kwargs):
+                commands.append(tuple(command))
+                if command[:3] == ("podman", "volume", "inspect"):
+                    return types.SimpleNamespace(returncode=0, stdout=str(volume))
+                if command[0] == "mv":
+                    os.rename(command[2], command[3])
+                returncode = 1 if command[-2:] == ("start", "ntfy.service") else 0
+                if check and returncode:
+                    raise subprocess.CalledProcessError(returncode, command)
+                return types.SimpleNamespace(returncode=returncode, stdout="")
+
+            with action_environment(state):
+                with patch("subprocess.run", side_effect=fake_run):
+                    runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
+
+            self.assertTrue((volume / "cache.db").exists())
+            reset = ("systemctl", "--user", "reset-failed",
+                     "ntfy.service", "ntfy-app.service")
+            start = ("systemctl", "--user", "start", "ntfy.service")
+            self.assertLess(commands.index(reset), commands.index(start))
 
     def test_does_nothing_without_legacy_data(self):
         with tempfile.TemporaryDirectory() as directory:
