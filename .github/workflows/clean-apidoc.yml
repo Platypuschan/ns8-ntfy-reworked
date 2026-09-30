@@ -3,6 +3,11 @@ name: "Clean up API JSON Schema docs"
 on:
   delete:
 
+# The reusable workflow deletes the apidoc-<branch> branch; the repository
+# token defaults to read-only, so grant write access explicitly.
+permissions:
+  contents: write
+
 jobs:
   build-apidoc:
     name: "Delete apidoc branch ${{ github.event.ref }}"
