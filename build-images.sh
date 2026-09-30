@@ -16,22 +16,25 @@ repobase="${REPOBASE:-ghcr.io/platypuschan}"
 # "ntfy-reworked" from the repository name "ns8-ntfy-reworked".
 reponame="ntfy-reworked"
 repository_source="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-Platypuschan/ns8-ntfy-reworked}"
-NTFY_TAG="v2.14"
+NTFY_TAG="v2.28.0"
+# Keep in sync with the Node.js version used by .github/workflows/validate.yml
+NODE_IMAGE="docker.io/library/node:24.20.0"
+nodebuilder="nodebuilder-ntfy-${NODE_IMAGE##*:}"
 # Create a new empty container image
 container=$(buildah from scratch)
 
-# Reuse existing nodebuilder-ntfy container, to speed up builds
-if ! buildah containers --format "{{.ContainerName}}" | grep -q nodebuilder-ntfy; then
+# Reuse an existing builder container for the same Node.js version, to speed up builds
+if ! buildah containers --format "{{.ContainerName}}" | grep -qx "${nodebuilder}"; then
 	echo "Pulling NodeJS runtime..."
-	buildah from --name nodebuilder-ntfy -v "${PWD}:/usr/src:Z" docker.io/library/node:lts
+	buildah from --name "${nodebuilder}" -v "${PWD}:/usr/src:Z" "${NODE_IMAGE}"
 fi
 
 echo "Build static UI files with node..."
 buildah run \
 	--workingdir=/usr/src/ui \
 	--env="NODE_OPTIONS=--openssl-legacy-provider" \
-	nodebuilder-ntfy \
-	sh -c "yarn install && yarn build"
+	"${nodebuilder}" \
+	sh -c "yarn install --frozen-lockfile && yarn build"
 
 # Add imageroot directory to the container image
 buildah add "${container}" imageroot /imageroot
@@ -40,6 +43,7 @@ buildah add "${container}" ui/dist /ui
 # IMAGETAG overrides the published module tag (latest by default).
 buildah config --entrypoint=/ \
 	--label="org.opencontainers.image.source=${repository_source}" \
+	--label="org.opencontainers.image.revision=${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}" \
 	--label="org.nethserver.authorizations=traefik@node:routeadm" \
 	--label="org.nethserver.tcp-ports-demand=1" \
 	--label="org.nethserver.rootfull=0" \

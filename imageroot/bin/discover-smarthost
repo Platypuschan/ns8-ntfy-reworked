@@ -12,9 +12,11 @@ import tempfile
 
 import agent
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "pypkg"))
+import ntfy_config
+
 
 ENV_PATH = "smarthost.env"
-SERVER_CONFIG_PATH = os.path.join("config", "server.yml")
 
 
 def write_env(values):
@@ -44,18 +46,6 @@ def write_env(values):
         raise
 
 
-def server_config_has_sender_from():
-    """Return true if the root-level server.yml defines smtp-sender-from."""
-    try:
-        with open(SERVER_CONFIG_PATH, "r", encoding="utf-8") as stream:
-            return any(
-                re.match(r"^\s*[\"']?smtp-sender-from[\"']?\s*:", line)
-                for line in stream
-            )
-    except FileNotFoundError:
-        return False
-
-
 def fallback_sender(username, host):
     """Derive a usable sender address when server.yml does not define one."""
     username = str(username).strip()
@@ -64,6 +54,18 @@ def fallback_sender(username, host):
     host = str(host).strip()
     return f"no-reply@{host}" if host else ""
 
+
+server_config = ntfy_config.read_server_config()
+
+# An SMTP relay defined in server.yml takes precedence over the NS8 smarthost:
+# injected NTFY_SMTP_* variables would otherwise override the file.
+if ntfy_config.root_scalar(server_config, "smtp-sender-addr"):
+    print(
+        "smtp-sender-addr is defined in server.yml; the NS8 smarthost is not used",
+        file=sys.stderr,
+    )
+    write_env({})
+    sys.exit(0)
 
 rdb = agent.redis_connect(use_replica=True)
 smtp = agent.get_smarthost_settings(rdb)
@@ -91,7 +93,7 @@ if not smtp.get("tls_verify", True):
     )
 
 values = {
-    "NTFY_SMTP_SENDER_ADDR": f'{smtp["host"]}:{smtp["port"]}',
+    "NTFY_SMTP_SENDER_ADDR": f'{smtp["host"]}:{smtp.get("port") or 25}',
 }
 if smtp.get("username"):
     values["NTFY_SMTP_SENDER_USER"] = smtp["username"]
@@ -101,7 +103,7 @@ if smtp.get("password"):
 # smtp-sender-from is not part of the NS8 smarthost object. Preserve an
 # explicit value in server.yml; otherwise prefer an email-shaped SMTP login
 # and finally fall back to the public ntfy host.
-if not server_config_has_sender_from():
+if not ntfy_config.root_scalar(server_config, "smtp-sender-from"):
     sender = fallback_sender(
         smtp.get("username", ""),
         os.getenv("TRAEFIK_HOST", ""),

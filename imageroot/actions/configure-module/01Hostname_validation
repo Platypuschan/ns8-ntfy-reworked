@@ -9,9 +9,6 @@ import os
 import sys
 import json
 import agent
-import urllib.request
-import urllib.error
-import ssl
 
 agent.set_weight(os.path.basename(__file__), 0) # Validation step, no task progress at all
 
