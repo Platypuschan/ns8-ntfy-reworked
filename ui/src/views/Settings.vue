@@ -63,7 +63,10 @@
             </cv-toggle>
             <!-- advanced options -->
             <cv-accordion ref="accordion" class="maxwidth mg-bottom">
-              <cv-accordion-item :open="toggleAccordion[0]">
+              <cv-accordion-item
+                :key="advancedAccordionKey"
+                :open="isAdvancedOpen"
+              >
                 <template slot="title">{{ $t("settings.advanced") }}</template>
                 <template slot="content">
                   <cv-text-area
@@ -138,6 +141,8 @@ export default {
       isLetsEncryptEnabled: false,
       isHttpToHttpsEnabled: true,
       serverConfig: "",
+      isAdvancedOpen: false,
+      advancedAccordionKey: 0,
       loading: {
         getConfiguration: false,
         configureModule: false,
@@ -260,8 +265,15 @@ export default {
         // set i18n error message
         this.error[param] = this.$t("settings." + validationError.error);
 
+        if (param === "server_config") {
+          // Carbon keeps its own open state after a manual close. Remount the
+          // item on every YAML error so repeated failures reveal the editor.
+          this.isAdvancedOpen = true;
+          this.advancedAccordionKey += 1;
+        }
+
         if (!focusAlreadySet) {
-          this.focusElement(param);
+          this.$nextTick(() => this.focusElement(param));
           focusAlreadySet = true;
         }
       }

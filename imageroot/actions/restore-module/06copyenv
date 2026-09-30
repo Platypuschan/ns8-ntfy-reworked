@@ -5,9 +5,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+import os
 import sys
 import json
 import agent
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "pypkg"))
+import ntfy_config
 
 request = json.load(sys.stdin)
 
@@ -22,23 +26,7 @@ for evar in [
 
 # An older backup has no config/server.yml. Restore its legacy ntfy settings
 # temporarily; configure-module migrates them to server.yml and removes them.
-for evar in [
-        "NTFY_BASE_URL",
-        "NTFY_AUTH_DEFAULT_ACCESS",
-        "NTFY_BEHIND_PROXY",
-        "NTFY_ENABLE_LOGIN",
-        "NTFY_ENABLE_SIGNUP",
-        "NTFY_UPSTREAM_BASE_URE",
-        "NTFY_UPSTREAM_BASE_URL",
-        "NTFY_UPSTREAM_ACCESS_TOKEN",
-        "NTFY_WEB_PUSH_EMAIL_ADDRESS",
-        "NTFY_CACHE_FILE",
-        "NTFY_ATTACHMENT_CACHE_DIR",
-        "NTFY_AUTH_FILE",
-        "NTFY_WEB_PUSH_FILE",
-        "NTFY_WEB_PUSH_PUBLIC_KEY",
-        "NTFY_WEB_PUSH_PRIVATE_KEY",
-    ]:
+for evar in ntfy_config.LEGACY_VARIABLES:
     if evar in original_environment:
         agent.set_env(evar, original_environment[evar])
 

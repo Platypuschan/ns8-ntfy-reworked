@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+
+#
+# Copyright (C) 2026 Nethesis S.r.l.
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Earlier releases bind-mounted the whole state directory at /var/lib/ntfy,
+# so ntfy databases and attachments were stored next to the agent files and
+# were never included in backups. Move them into the ntfy-data volume.
+
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "pypkg"))
+import ntfy_config
+
+# Agent and module files that always stay in the state directory.
+STATE_FILES = {"environment", "agent.env", "config", "smarthost.env"}
+SQLITE_SUFFIXES = ("", "-wal", "-shm", "-journal")
+
+
+def legacy_entries():
+    entries = []
+    for name in ntfy_config.data_names(ntfy_config.read_server_config()):
+        if not name or name.startswith(".") or name in STATE_FILES:
+            continue
+        for suffix in SQLITE_SUFFIXES:
+            path = name + suffix
+            if os.path.lexists(path) and path not in entries:
+                entries.append(path)
+    return entries
+
+
+def systemctl(*args, check=True):
+    return subprocess.run(("systemctl", "--user") + args, check=check)
+
+
+entries = legacy_entries()
+if not entries:
+    sys.exit(0)
+
+subprocess.run(
+    ("podman", "volume", "create", "--ignore", ntfy_config.DATA_VOLUME),
+    check=True,
+    stdout=subprocess.DEVNULL,
+)
+mountpoint = subprocess.run(
+    ("podman", "volume", "inspect", "--format", "{{.Mountpoint}}", ntfy_config.DATA_VOLUME),
+    check=True,
+    capture_output=True,
+    text=True,
+).stdout.strip()
+
+# Stop ntfy so SQLite files are closed and checkpointed before moving them.
+was_active = systemctl("is-active", "--quiet", "ntfy.service", check=False).returncode == 0
+if was_active:
+    systemctl("stop", "ntfy.service")
+
+try:
+    for entry in entries:
+        target = os.path.join(mountpoint, entry)
+        if os.path.lexists(target):
+            print(f"Keeping existing {target}; legacy {entry} left in the state directory", file=sys.stderr)
+            continue
+        # Volume and state directory are both in the module home, so this is
+        # normally an atomic rename.
+        subprocess.run(("mv", "--no-target-directory", entry, target), check=True)
+        print(f"Moved {entry} to volume {ntfy_config.DATA_VOLUME}", file=sys.stderr)
+finally:
+    if was_active:
+        systemctl("daemon-reload", check=False)
+        # A service updated from the original module may have crash-looped
+        # on invalid legacy NTFY_* values and hit its start rate limit.
+        systemctl("reset-failed", "ntfy.service", "ntfy-app.service", check=False)
+        # The data is already in place: a start failure must not fail the
+        # update, configure-module and later restarts start ntfy again.
+        if systemctl("start", "ntfy.service", check=False).returncode != 0:
+            print("<4>ntfy.service did not start after the data migration", file=sys.stderr)

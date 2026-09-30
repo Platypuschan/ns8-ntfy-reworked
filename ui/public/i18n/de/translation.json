@@ -20,7 +20,7 @@
         "disabled": "Deaktiviert",
         "advanced": "Erweitert",
         "server_config": "ntfy server.yml",
-        "server_config_helper": "Vollständige ntfy-Serverkonfiguration im YAML-Format. NS8 setzt behind-proxy=true und proxy-forwarded-header=X-Forwarded-For automatisch. proxy-trusted-hosts ist nur für zusätzliche vorgeschaltete Proxies erforderlich. Ein aktivierter, kompatibler NS8-Smarthost überschreibt smtp-sender-addr, -user und -pass; smtp-sender-from aus dieser Datei bleibt erhalten. Ungültiges YAML verhindert den Start von ntfy.",
+        "server_config_helper": "Vollständige ntfy-Serverkonfiguration im YAML-Format. NS8 setzt behind-proxy=true und proxy-forwarded-header=X-Forwarded-For automatisch. proxy-trusted-hosts ist nur für zusätzliche vorgeschaltete Proxies erforderlich. Ist smtp-sender-addr hier nicht gesetzt, liefert ein aktivierter, kompatibler NS8-Smarthost smtp-sender-addr, -user und -pass; smtp-sender-from aus dieser Datei bleibt erhalten.",
         "configuring": "Konfiguration läuft",
         "instance_configuration": "ntfy konfigurieren",
         "domain_already_used_in_traefik": "Domain wird bereits in Traefik verwendet",
@@ -28,7 +28,8 @@
         "host_format": "Muss ein gültiger vollqualifizierter Domainname sein",
         "configure_instance": "{instance} konfigurieren",
         "save": "Speichern",
-        "title": "Einstellungen"
+        "title": "Einstellungen",
+        "invalid_server_config": "Ungültiges YAML: server.yml muss eine YAML-Zuordnung von ntfy-Optionen sein"
     },
     "common": {
         "required": "erforderlich",

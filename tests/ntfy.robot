@@ -5,7 +5,7 @@ Library    String
 *** Variables ***
 ${IMAGE_URL}         ghcr.io/platypuschan/ntfy-reworked:latest
 # The update scenario installs the original NS8 module before migrating to this fork.
-${BASELINE_IMAGE}    ghcr.io/geniusdynamics/ntfy:latest
+${BASELINE_IMAGE}    ghcr.io/geniusdynamics/ntfy:1.0.0
 ${SCENARIO}          install
 ${HOST}              ntfy.test
 ${module_id}         ${EMPTY}
@@ -58,6 +58,10 @@ Configure initial module
         ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
         ...    return_rc=True
         Should Be Equal As Integers    ${rc}    0    baseline configure-module failed: ${output}
+        # The baseline stores ntfy data directly in the state directory.
+        ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'mkdir -p attachments && echo legacy > attachments/ci-marker'
+        ...    return_rc=True    return_stdout=False
+        Should Be Equal As Integers    ${rc}    0
     ELSE
         Configure current module with test server.yml
     END
@@ -68,6 +72,9 @@ Update module and migrate legacy configuration
         ${output}    ${rc} =    Execute Command    api-cli run update-module --data '{"force":true,"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
         ...    return_rc=True
         Should Be Equal As Integers    ${rc}    0    update-module ${IMAGE_URL} failed: ${output}
+        # update-module does not fail the task when an update-module.d step fails
+        ${journal} =    Execute Command    journalctl -q --no-pager SYSLOG_IDENTIFIER=agent@${module_id}
+        Should Not Contain    ${journal}    has failed    an update-module.d step failed
 
         ${payload} =    Evaluate    json.dumps({"host": "${HOST}", "http2https": False, "lets_encrypt": False})    modules=json
         ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
@@ -120,6 +127,46 @@ Publish and subscribe through Traefik
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0    subscribe failed: ${output}
     Should Contain    ${output}    "message":"${message}"
+
+Check ntfy data is stored in the backed up volume
+    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'test -f "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/cache.db"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    cache.db is not in the ntfy-data volume
+    ${rc} =    Execute Command    runagent -m ${module_id} test ! -e cache.db
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    cache.db is still in the state directory
+    ${include} =    Execute Command    runagent -m ${module_id} sh -c 'cat ../etc/state-include.conf'
+    Should Contain    ${include}    volumes/ntfy-data/.ntfy-backup-snapshot
+    IF    r'${SCENARIO}' == 'update'
+        ${output}    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/attachments/ci-marker"'
+        ...    return_rc=True
+        Should Be Equal As Integers    ${rc}    0    legacy attachments were not migrated: ${output}
+        Should Be Equal    ${output}    legacy
+    END
+
+Check backup snapshot and service restart
+    # Attachments are hard-linked into the snapshot inside Podman's user namespace
+    ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'm="$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)"; mkdir -p "$m/attachments" && echo ci > "$m/attachments/ci-link"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
+    ${rc} =    Execute Command    runagent -m ${module_id} module-dump-state
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    ntfy snapshot failed
+    ${snapshot} =    Execute Command    runagent -m ${module_id} sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/.ntfy-backup-snapshot/server.yml"'
+    Should Contain    ${snapshot}    cache-file: "/var/lib/ntfy/cache.db"
+    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'test -f "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/.ntfy-backup-snapshot/data/cache.db"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    snapshot has no SQLite database
+    ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'm="$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)"; test "$m/attachments/ci-link" -ef "$m/.ntfy-backup-snapshot/data/attachments/ci-link" && test ! "$m/cache.db" -ef "$m/.ntfy-backup-snapshot/data/cache.db"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    attachments are not hard-linked or cache.db is not a copy
+    Wait until ntfy is healthy
+    ${rc} =    Execute Command    runagent -m ${module_id} module-cleanup-state
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    snapshot cleanup failed
+    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'test ! -e "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/.ntfy-backup-snapshot"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    temporary snapshot remains after cleanup
 
 Remove module
     ${rc} =    Execute Command    remove-module --no-preserve ${module_id}

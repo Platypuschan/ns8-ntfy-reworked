@@ -13,6 +13,9 @@ import os
 import sys
 import json
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "pypkg"))
+import ntfy_config
+
 # Prepare return variable
 config = {}
 
@@ -20,22 +23,10 @@ config = {}
 config["host"] = os.getenv("TRAEFIK_HOST","")
 config["http2https"] = os.getenv("TRAEFIK_HTTP2HTTPS") == "True"
 config["lets_encrypt"] = os.getenv("TRAEFIK_LETS_ENCRYPT") == "True"
-config_path = os.path.join("config", "server.yml")
-try:
-    with open(config_path, "r", encoding="utf-8") as stream:
-        config["server_config"] = stream.read()
-except FileNotFoundError:
-    host = config["host"]
-    config["server_config"] = "\n".join((
-        f'base-url: "https://{host}"',
-        'cache-file: "/var/lib/ntfy/cache.db"',
-        'attachment-cache-dir: "/var/lib/ntfy/attachments"',
-        'auth-file: "/var/lib/ntfy/auth.db"',
-        'auth-default-access: "deny-all"',
-        "enable-login: true",
-        "enable-signup: false",
-        "",
-    ))
+if os.path.exists(ntfy_config.CONFIG_PATH):
+    config["server_config"] = ntfy_config.read_server_config()
+else:
+    config["server_config"] = ntfy_config.default_config(config["host"])
 
 # Dump the configuration to stdout
 json.dump(config, fp=sys.stdout)
