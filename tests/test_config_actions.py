@@ -32,6 +32,7 @@ VALIDATE_ACTION = (
 DATA_MIGRATION = (
     REPOSITORY_ROOT / "imageroot/update-module.d/15migrate_data_volume"
 )
+START_MIGRATION = REPOSITORY_ROOT / "imageroot/bin/migrate-data-volume"
 STATE_INCLUDE = REPOSITORY_ROOT / "imageroot/etc/state-include.conf"
 PYPKG = REPOSITORY_ROOT / "imageroot/pypkg"
 
@@ -370,6 +371,55 @@ class DataMigrationTests(unittest.TestCase):
                         runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
             self.assertEqual(raised.exception.code, 0)
             run.assert_not_called()
+
+
+class StartMigrationTests(unittest.TestCase):
+    def test_moves_legacy_data_before_start_without_touching_the_service(self):
+        # A restart during the update can run before server.yml exists; the
+        # legacy variables still name custom data paths then.
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "state"
+            volume = Path(directory) / "volume"
+            state.mkdir()
+            volume.mkdir()
+            for name in ("auth.db", "messages.db", "messages.db-wal", "environment"):
+                (state / name).write_text(name, encoding="utf-8")
+            (state / "attachments").mkdir()
+            commands = []
+
+            def fake_run(command, **kwargs):
+                commands.append(tuple(command))
+                if command[:3] == ("podman", "volume", "inspect"):
+                    return types.SimpleNamespace(returncode=0, stdout=str(volume))
+                if command[0] == "mv":
+                    os.rename(command[2], command[3])
+                return types.SimpleNamespace(returncode=0, stdout="")
+
+            legacy = {"NTFY_CACHE_FILE": "/var/lib/ntfy/messages.db"}
+            with action_environment(state, environment=legacy):
+                with patch("subprocess.run", side_effect=fake_run):
+                    runpy.run_path(str(START_MIGRATION), run_name="__main__")
+
+            for name in ("auth.db", "messages.db", "messages.db-wal", "attachments"):
+                self.assertTrue((volume / name).exists(), name)
+                self.assertFalse((state / name).exists(), name)
+            self.assertTrue((state / "environment").exists())
+            self.assertFalse([c for c in commands if c[0] == "systemctl"])
+
+    def test_normal_start_does_not_call_podman(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with action_environment(directory):
+                with patch("subprocess.run") as run:
+                    runpy.run_path(str(START_MIGRATION), run_name="__main__")
+            run.assert_not_called()
+
+    def test_service_migrates_before_the_container_starts(self):
+        unit = SERVICE_UNIT.read_text(encoding="utf-8")
+        # Without "-": if the data cannot be moved, ntfy must not start and
+        # create empty databases in the volume.
+        step = "ExecStartPre=runagent migrate-data-volume\n"
+        self.assertIn(step, unit)
+        self.assertLess(unit.index(step), unit.index("ExecStart=/usr/bin/podman run"))
 
 
 class BackupIncludeTests(unittest.TestCase):
