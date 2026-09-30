@@ -86,8 +86,9 @@ When upgrading from an older release, the update action converts existing
 `NTFY_*` values to `server.yml` once and then removes those legacy variables.
 Releases before this change stored ntfy data directly in the state directory,
 where it was not backed up. The update stops ntfy briefly and moves those files
-and directories into the `ntfy-data` volume. Existing files in the volume are
-never overwritten.
+and directories into the `ntfy-data` volume. `ntfy-app.service` does the same
+before every start, so ntfy never starts on the volume while data is still in
+the state directory. Existing files in the volume are never overwritten.
 
 ## Reverse proxy
 
