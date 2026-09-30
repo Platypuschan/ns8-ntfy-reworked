@@ -21,24 +21,28 @@ def systemctl(*args, check=True):
     return subprocess.run(("systemctl", "--user") + args, check=check)
 
 
-entries = ntfy_migration.legacy_entries()
-if not entries:
+if not ntfy_migration.legacy_names():
     sys.exit(0)
 
 # Stop ntfy so SQLite files are closed and checkpointed before moving them.
-was_active = systemctl("is-active", "--quiet", "ntfy.service", check=False).returncode == 0
-if was_active:
-    systemctl("stop", "ntfy.service")
+# Stop unconditionally: while the upstream module crash-loops, ntfy is often
+# "activating" rather than active, and a start in progress (including its
+# ExecStartPre migration) must not run concurrently with this step.
+start_again = (
+    systemctl("is-active", "--quiet", "ntfy.service", check=False).returncode == 0
+    or systemctl("is-enabled", "--quiet", "ntfy.service", check=False).returncode == 0
+)
+systemctl("stop", "ntfy.service", "ntfy-app.service")
 
 try:
-    # Recompute: a start of ntfy-app may have moved some entries meanwhile.
-    ntfy_migration.move_legacy_data(ntfy_migration.legacy_entries())
+    # Recompute: a start of ntfy-app may have moved some data meanwhile.
+    ntfy_migration.move_legacy_data(ntfy_migration.legacy_names())
 finally:
-    if was_active:
+    # A service updated from the original module may have crash-looped
+    # on invalid legacy NTFY_* values and hit its start rate limit.
+    systemctl("reset-failed", "ntfy.service", "ntfy-app.service", check=False)
+    if start_again:
         systemctl("daemon-reload", check=False)
-        # A service updated from the original module may have crash-looped
-        # on invalid legacy NTFY_* values and hit its start rate limit.
-        systemctl("reset-failed", "ntfy.service", "ntfy-app.service", check=False)
         # The data is already in place: a start failure must not fail the
         # update, configure-module and later restarts start ntfy again.
         if systemctl("start", "ntfy.service", check=False).returncode != 0:
