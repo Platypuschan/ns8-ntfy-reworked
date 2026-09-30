@@ -6,7 +6,10 @@
 """Prepare a consistent ntfy data snapshot for the NS8 module backup."""
 
 import os
+import re
 import subprocess
+
+import ntfy_config
 
 
 DATA_VOLUME = "ntfy-data"
@@ -17,14 +20,23 @@ SNAPSHOT = ".ntfy-backup-snapshot"
 SNAPSHOT_SCRIPT = r"""
 volume=$1
 config=$2
+attachments=$3
 snapshot="$volume/.ntfy-backup-snapshot"
 staging="$volume/.ntfy-backup-snapshot.tmp"
 rm -rf -- "$staging"
 mkdir -p -- "$staging/data"
+# Copy everything but the attachments. Without an attachment directory the
+# third pattern repeats the first one.
 find "$volume" -mindepth 1 -maxdepth 1 \
   ! -name '.ntfy-backup-snapshot' \
   ! -name '.ntfy-backup-snapshot.tmp' \
+  ! -name "${attachments:-.ntfy-backup-snapshot}" \
   -exec cp -a -- {} "$staging/data/" \;
+# ntfy never changes an attachment file after writing it, so hard links
+# give a stable copy without duplicating the attachment data.
+if [ -n "$attachments" ] && [ -e "$volume/$attachments" ]; then
+  cp -al -- "$volume/$attachments" "$staging/data/"
+fi
 if [ -f "$config" ]; then
   cp -a -- "$config" "$staging/server.yml"
 fi
@@ -112,11 +124,36 @@ def with_ntfy_stopped(operation):
             )
 
 
+def attachment_directory(config_path):
+    """Return the top-level volume entry holding ntfy attachments, or ""."""
+    try:
+        with open(config_path, "r", encoding="utf-8") as stream:
+            content = stream.read()
+    except FileNotFoundError:
+        return ""
+    value = ntfy_config.root_scalar(content, "attachment-cache-dir")
+    if not value:
+        return ""
+    path = os.path.normpath(value)
+    prefix = ntfy_config.DATA_MOUNT + "/"
+    if not path.startswith(prefix):
+        return ""
+    name = path[len(prefix):]
+    # Only a plain top-level name is linked; it is also used as a find
+    # pattern. Any other location is copied like the remaining data.
+    if not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9._-]*", name):
+        return ""
+    return name
+
+
 def make_snapshot(state_dir):
     mountpoint = volume_mountpoint()
     config_path = os.path.join(state_dir, "config", "server.yml")
+    attachments = attachment_directory(config_path)
     with_ntfy_stopped(
-        lambda: run_in_user_namespace(SNAPSHOT_SCRIPT, mountpoint, config_path)
+        lambda: run_in_user_namespace(
+            SNAPSHOT_SCRIPT, mountpoint, config_path, attachments
+        )
     )
 
 

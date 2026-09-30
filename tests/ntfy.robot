@@ -145,6 +145,10 @@ Check ntfy data is stored in the backed up volume
     END
 
 Check backup snapshot and service restart
+    # Attachments are hard-linked into the snapshot inside Podman's user namespace
+    ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'm="$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)"; mkdir -p "$m/attachments" && echo ci > "$m/attachments/ci-link"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
     ${rc} =    Execute Command    runagent -m ${module_id} module-dump-state
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0    ntfy snapshot failed
@@ -153,6 +157,9 @@ Check backup snapshot and service restart
     ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'test -f "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/.ntfy-backup-snapshot/data/cache.db"'
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0    snapshot has no SQLite database
+    ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'm="$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)"; test "$m/attachments/ci-link" -ef "$m/.ntfy-backup-snapshot/data/attachments/ci-link" && test ! "$m/cache.db" -ef "$m/.ntfy-backup-snapshot/data/cache.db"'
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0    attachments are not hard-linked or cache.db is not a copy
     Wait until ntfy is healthy
     ${rc} =    Execute Command    runagent -m ${module_id} module-cleanup-state
     ...    return_rc=True    return_stdout=False

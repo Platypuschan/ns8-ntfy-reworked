@@ -34,7 +34,7 @@ buildah run \
 	--workingdir=/usr/src/ui \
 	--env="NODE_OPTIONS=--openssl-legacy-provider" \
 	"${nodebuilder}" \
-	sh -c "yarn install && yarn build"
+	sh -c "yarn install --frozen-lockfile && yarn build"
 
 # Add imageroot directory to the container image
 buildah add "${container}" imageroot /imageroot

@@ -76,7 +76,10 @@ attachments and `server.yml` are copied into a temporary snapshot within the
 `ntfy-data` volume. ntfy is started again before Restic uploads that snapshot.
 After a successful backup, the temporary copy is removed. A failed upload can
 leave the copy in the volume until the next backup, but does not leave ntfy
-stopped. Allow enough free space in the volume for a second copy of its data.
+stopped. Allow enough free space in the volume for a second copy of the
+databases. Attachments in a top-level `attachment-cache-dir` below
+`/var/lib/ntfy` are hard-linked into the snapshot instead of copied, because
+ntfy never modifies an attachment file after writing it.
 Restores of backups made before this snapshot change remain supported.
 
 When upgrading from an older release, the update action converts existing

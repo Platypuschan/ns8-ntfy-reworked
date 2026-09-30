@@ -53,6 +53,44 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(config.stat().st_mode & 0o777, 0o600)
             self.assertFalse(snapshot.exists())
 
+    def test_snapshot_links_attachments_and_copies_databases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            volume = Path(directory)
+            config = volume / "missing.yml"
+            (volume / "cache.db").write_bytes(b"messages")
+            (volume / "attachments").mkdir()
+            (volume / "attachments/file").write_bytes(b"attachment")
+
+            ntfy_backup.run_in_user_namespace(
+                ntfy_backup.SNAPSHOT_SCRIPT, volume, config, "attachments", prefix=()
+            )
+            snapshot = volume / ntfy_backup.SNAPSHOT / "data"
+            self.assertTrue((snapshot / "attachments/file").samefile(volume / "attachments/file"))
+            self.assertFalse((snapshot / "cache.db").samefile(volume / "cache.db"))
+            self.assertEqual((snapshot / "cache.db").read_bytes(), b"messages")
+            self.assertFalse((snapshot / "attachments/attachments").exists())
+
+            # An expired attachment removed by ntfy stays in the snapshot.
+            (volume / "attachments/file").unlink()
+            self.assertEqual((snapshot / "attachments/file").read_bytes(), b"attachment")
+
+    def test_attachment_directory_is_a_plain_top_level_volume_entry(self):
+        cases = {
+            'attachment-cache-dir: "/var/lib/ntfy/attachments"\n': "attachments",
+            "attachment-cache-dir: /var/lib/ntfy/files/ # comment\n": "files",
+            'attachment-cache-dir: "/var/lib/ntfy/a/b"\n': "",
+            'attachment-cache-dir: "/srv/attachments"\n': "",
+            'attachment-cache-dir: "/var/lib/ntfy/.hidden"\n': "",
+            'attachment-cache-dir: "/var/lib/ntfy/*"\n': "",
+            "base-url: https://ntfy.test\n": "",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "server.yml"
+            self.assertEqual(ntfy_backup.attachment_directory(config), "")
+            for content, expected in cases.items():
+                config.write_text(content)
+                self.assertEqual(ntfy_backup.attachment_directory(config), expected, content)
+
     def test_new_snapshot_replaces_old_copy_without_nesting_it(self):
         with tempfile.TemporaryDirectory() as directory:
             volume = Path(directory)
