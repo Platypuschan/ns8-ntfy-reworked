@@ -11,6 +11,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "pypkg"))
 import ntfy_migration
 
-entries = ntfy_migration.legacy_entries()
-if entries:
-    ntfy_migration.move_legacy_data(entries)
+names = ntfy_migration.legacy_names()
+if names:
+    ntfy_migration.move_legacy_data(names)
