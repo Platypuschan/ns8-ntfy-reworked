@@ -88,7 +88,10 @@ Releases before this change stored ntfy data directly in the state directory,
 where it was not backed up. The update stops ntfy briefly and moves those files
 and directories into the `ntfy-data` volume. `ntfy-app.service` does the same
 before every start, so ntfy never starts on the volume while data is still in
-the state directory. Existing files in the volume are never overwritten.
+the state directory. If ntfy was nevertheless started on the volume before
+the data moved, the data from the state directory takes precedence:
+directories are merged, and replaced databases are kept next to the moved ones
+as `<name>.replaced-<timestamp>`. Nothing is deleted.
 
 ## Reverse proxy
 
