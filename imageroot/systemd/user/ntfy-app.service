@@ -15,6 +15,9 @@ WorkingDirectory=%E/state
 Restart=always
 TimeoutStopSec=70
 ExecStartPre=/bin/mkdir -p config
+# Move data of releases before the ntfy-data volume first, so ntfy never
+# starts on an empty volume while the real data is still in the state dir.
+ExecStartPre=runagent migrate-data-volume
 ExecStartPre=/bin/rm -f %t/ntfy-app.pid %t/ntfy-app.ctr-id
 ExecStartPre=-runagent discover-smarthost
 ExecStart=/usr/bin/podman run --conmon-pidfile %t/ntfy-app.pid \
