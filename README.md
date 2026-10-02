@@ -191,11 +191,23 @@ The test scripts accept an NS8 leader node address and a module image URL:
 ```bash
 ./test-module-install.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
 ./test-module-update.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
+./test-module-upgrade.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
 ```
 
 The update test starts with the original NS8 ntfy module
 (`ghcr.io/geniusdynamics/ntfy:1.0.0`) and then upgrades to the image supplied
 here, including the migration of legacy data into the `ntfy-data` volume.
+
+The upgrade test starts with the last published release of this module and
+updates it without a forced pull, like the Software Center. It checks that a
+cached message and a file in the `ntfy-data` volume survive.
+`.github/scripts/previous-release` looks the release up in GHCR: the newest
+stable tag that is not newer than `CATALOG_VERSION`.
+
+Every change to `imageroot/`, `ui/` or `build-images.sh` needs a higher
+`CATALOG_VERSION`. Validate fails otherwise
+(`.github/scripts/check-catalog-version`), and so does the catalog promotion,
+because an existing version tag is never overwritten.
 
 Unit tests for actions and helpers need PyYAML, which the NS8 agent provides:
 
