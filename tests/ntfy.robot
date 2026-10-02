@@ -6,6 +6,9 @@ Library    String
 ${IMAGE_URL}         ghcr.io/platypuschan/ntfy-reworked:latest
 # The update scenario installs the original NS8 module before migrating to this fork.
 ${BASELINE_IMAGE}    ghcr.io/geniusdynamics/ntfy:1.0.0
+# The upgrade scenario starts from the last published release of this module;
+# test-module-upgrade.sh looks it up in the registry.
+${PREVIOUS_IMAGE_URL}    ${EMPTY}
 ${SCENARIO}          install
 ${HOST}              ntfy.test
 ${module_id}         ${EMPTY}
@@ -43,6 +46,8 @@ Configure current module with test server.yml
 Add module for ${SCENARIO} scenario
     IF    r'${SCENARIO}' == 'update'
         Set Local Variable    ${install_image}    ${BASELINE_IMAGE}
+    ELSE IF    r'${SCENARIO}' == 'upgrade'
+        Set Local Variable    ${install_image}    ${PREVIOUS_IMAGE_URL}
     ELSE
         Set Local Variable    ${install_image}    ${IMAGE_URL}
     END
@@ -65,6 +70,17 @@ Configure initial module
     ELSE
         Configure current module with test server.yml
     END
+    IF    r'${SCENARIO}' == 'upgrade'
+        # Leave a message in the SQLite cache and a file in the data volume.
+        Read allocated web port
+        Wait until ntfy is healthy
+        ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 -d 'before-upgrade' http://127.0.0.1:${web_port}/ci-before-upgrade
+        ...    return_rc=True
+        Should Be Equal As Integers    ${rc}    0    publish before upgrade failed: ${output}
+        ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'm="$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)"; mkdir -p "$m/attachments" && echo before-upgrade > "$m/attachments/ci-upgrade-marker"'
+        ...    return_rc=True    return_stdout=False
+        Should Be Equal As Integers    ${rc}    0
+    END
 
 Update module and migrate legacy configuration
     Log    Scenario ${SCENARIO} with ${IMAGE_URL}    console=${True}
@@ -86,11 +102,32 @@ Update module and migrate legacy configuration
         Should Match Regexp    ${migration_size}    ^[1-9][0-9]*$
 
         Configure current module with test server.yml
+    ELSE IF    r'${SCENARIO}' == 'upgrade'
+        # Same request as the Software Center: no forced pull.
+        ${output}    ${rc} =    Execute Command    api-cli run update-module --data '{"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
+        ...    return_rc=True
+        Should Be Equal As Integers    ${rc}    0    update-module ${IMAGE_URL} failed: ${output}
+        ${journal} =    Execute Command    journalctl -q --no-pager SYSLOG_IDENTIFIER=agent@${module_id}
+        Should Not Contain    ${journal}    has failed    an update-module.d step failed
+        ${image} =    Execute Command    runagent -m ${module_id} printenv IMAGE_URL
+        ${image} =    Strip String    ${image}
+        Should Be Equal    ${image}    ${IMAGE_URL}
     END
 
 Check service health after install or update
     Read allocated web port
     Wait until ntfy is healthy
+
+Check data kept by the upgrade
+    Skip If    r'${SCENARIO}' != 'upgrade'    only the upgrade scenario has data from the previous release
+    ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 'http://127.0.0.1:${web_port}/ci-before-upgrade/json?poll=1'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0    poll after upgrade failed: ${output}
+    Should Contain    ${output}    "message":"before-upgrade"
+    ${output}    ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/attachments/ci-upgrade-marker"'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0    volume file lost by the upgrade: ${output}
+    Should Be Equal    ${output}    before-upgrade
 
 Check server.yml persistence and read-only mount
     ${mode} =    Execute Command    runagent -m ${module_id} stat -c '%a' config/server.yml
