@@ -124,7 +124,7 @@ jobs:
           cache-dependency-path: ui/yarn.lock
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
         working-directory: ui
 
       - name: Lint
