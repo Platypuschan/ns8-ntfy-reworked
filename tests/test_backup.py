@@ -144,9 +144,14 @@ class SnapshotTests(unittest.TestCase):
             ntfy_backup.with_ntfy_stopped(lambda: None)
         self.assertNotIn(("systemctl", "--user", "start", "ntfy.service"), calls)
 
-    def test_no_snapshot_keeps_legacy_restores_unchanged(self):
-        with patch.object(ntfy_backup, "volume_mountpoint", return_value="/test/volume"):
-            with patch.object(ntfy_backup.subprocess, "run") as run:
-                run.return_value = subprocess.CompletedProcess([], 1, "")
-                ntfy_backup.restore_snapshot("/test/state")
-        run.assert_called_once()
+    def test_restore_without_snapshot_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            volume = Path(directory) / "volume"
+            volume.mkdir()
+            (volume / "cache.db").write_bytes(b"messages")
+            with self.assertRaises(subprocess.CalledProcessError):
+                ntfy_backup.run_in_user_namespace(
+                    ntfy_backup.RESTORE_SCRIPT, volume,
+                    Path(directory) / "config/server.yml", prefix=(),
+                )
+            self.assertEqual((volume / "cache.db").read_bytes(), b"messages")

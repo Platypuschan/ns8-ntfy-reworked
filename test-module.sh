@@ -16,7 +16,7 @@ RUNNER_IMAGE="ghcr.io/marketsquare/robotframework-browser/rfbrowser-stable:19.11
 CONTAINER_NAME="rf-ntfy-${SCENARIO}"
 
 case "${SCENARIO}" in
-    install|update) ;;
+    install) ;;
     upgrade)
         if [[ -z "${PREVIOUS_IMAGE_URL}" ]]; then
             echo "The upgrade scenario needs PREVIOUS_IMAGE_URL; run test-module-upgrade.sh." >&2
@@ -24,7 +24,7 @@ case "${SCENARIO}" in
         fi
         ;;
     *)
-        echo "Unsupported test scenario '${SCENARIO}'; expected install, update or upgrade." >&2
+        echo "Unsupported test scenario '${SCENARIO}'; expected install or upgrade." >&2
         exit 64
         ;;
 esac
