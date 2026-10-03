@@ -41,11 +41,7 @@
             <div class="logo-and-name">
               <div class="app-logo">
                 <img
-                  :src="
-                    app.logo
-                      ? app.logo
-                      : require('@/assets/module_default_logo.png')
-                  "
+                  :src="app.logo ? app.logo : defaultLogo"
                   :alt="app.name + ' logo'"
                 />
               </div>
@@ -167,6 +163,8 @@ import {
   UtilService,
   PageTitleService,
 } from "@nethserver/ns8-ui-lib";
+import appMetadata from "../../public/metadata.json";
+import defaultLogo from "@/assets/module_default_logo.png";
 
 export default {
   name: "About",
@@ -181,6 +179,7 @@ export default {
         page: "about",
       },
       urlCheckInterval: null,
+      defaultLogo,
       app: null,
       version: "",
       error: {
@@ -215,7 +214,7 @@ export default {
   methods: {
     getModuleInfo() {
       this.loading.moduleInfo = true;
-      const metadata = require("../../public/metadata.json");
+      const metadata = appMetadata;
       this.app = metadata;
       this.loading.moduleInfo = false;
     },

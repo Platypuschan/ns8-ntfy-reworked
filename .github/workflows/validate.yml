@@ -106,8 +106,6 @@ jobs:
   ui:
     name: UI lint and build
     runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: --openssl-legacy-provider
     steps:
       - name: Checkout
         uses: actions/checkout@v7
