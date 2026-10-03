@@ -32,7 +32,6 @@ fi
 echo "Build static UI files with node..."
 buildah run \
 	--workingdir=/usr/src/ui \
-	--env="NODE_OPTIONS=--openssl-legacy-provider" \
 	"${nodebuilder}" \
 	sh -c "corepack enable && yarn install --immutable && yarn build"
 

@@ -15,7 +15,7 @@ To install from the command line, use a released version number from
 [`CATALOG_VERSION`](CATALOG_VERSION) or the catalog, for example:
 
 ```bash
-add-module ghcr.io/platypuschan/ntfy-reworked:0.3.2 1
+add-module ghcr.io/platypuschan/ntfy-reworked:0.3.3 1
 ```
 
 The command returns an instance ID such as `ntfy-reworked1`. Use the returned
@@ -34,7 +34,7 @@ version number:
 
 ```bash
 api-cli run update-module --data '{
-  "module_url": "ghcr.io/platypuschan/ntfy-reworked:0.3.2",
+  "module_url": "ghcr.io/platypuschan/ntfy-reworked:0.3.3",
   "instances": ["ntfy-reworked1"]
 }'
 ```
