@@ -7,14 +7,46 @@ and optional outgoing mail through the NS8 smarthost. It runs the
 
 ## Install
 
-Install the module on the intended NS8 node:
+Add the [Platypuschan NS8 module catalog](https://github.com/Platypuschan/ns8-modules#add-the-repository)
+as a software repository and install **ntfy Reworked** from the NS8 Software
+Center.
+
+To install from the command line, use a released version number from
+[`CATALOG_VERSION`](CATALOG_VERSION) or the catalog, for example:
 
 ```bash
-add-module ghcr.io/platypuschan/ntfy-reworked:latest 1
+add-module ghcr.io/platypuschan/ntfy-reworked:0.2.2 1
 ```
 
 The command returns an instance ID such as `ntfy-reworked1`. Use the returned
 ID in the commands below.
+
+Do not install production instances from `:latest` or a branch tag. NS8 takes
+the displayed module version from the image tag and offers updates only to
+instances with a SemVer version such as `0.2.2`; an instance installed from
+`:latest` never receives update notifications.
+
+## Update
+
+Create and verify an NS8 application backup before every update. Then update
+the instance from the NS8 Software Center or from the command line with the new
+version number:
+
+```bash
+api-cli run update-module --data '{
+  "module_url": "ghcr.io/platypuschan/ntfy-reworked:0.2.2",
+  "instances": ["ntfy-reworked1"]
+}'
+```
+
+An instance that shows the version `latest` was installed or updated from the
+moving `:latest` tag. Update it once with the command above to a released
+version; afterwards the Software Center offers new catalog versions again.
+`force` is only needed for moving development tags such as `:latest`, because
+it makes NS8 pull the image again even if the tag is already present locally.
+
+When upgrading from an older release, see the data migration notes in
+[Data and backup](#data-and-backup).
 
 ## Configure
 
