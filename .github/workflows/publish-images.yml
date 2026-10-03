@@ -34,20 +34,12 @@ jobs:
             script: test-module-install.sh
             cloud_image_url: ""
           - distro: rocky9
-            scenario: update
-            script: test-module-update.sh
-            cloud_image_url: ""
-          - distro: rocky9
             scenario: upgrade
             script: test-module-upgrade.sh
             cloud_image_url: ""
           - distro: debian13
             scenario: install
             script: test-module-install.sh
-            cloud_image_url: "https://laotzu.ftp.acc.umu.se/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2"
-          - distro: debian13
-            scenario: update
-            script: test-module-update.sh
             cloud_image_url: "https://laotzu.ftp.acc.umu.se/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2"
           - distro: debian13
             scenario: upgrade

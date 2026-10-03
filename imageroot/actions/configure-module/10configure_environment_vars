@@ -8,7 +8,6 @@
 import json
 import os
 import sys
-import agent
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "pypkg"))
 import ntfy_config
@@ -21,13 +20,6 @@ server_config = data.get("server_config")
 if server_config is not None:
     ntfy_config.write_server_config(server_config)
 elif not os.path.exists(ntfy_config.CONFIG_PATH):
-    ntfy_config.write_server_config(ntfy_config.initial_config(data.get("host", "")))
+    ntfy_config.write_server_config(ntfy_config.default_config(data.get("host", "")))
 else:
     ntfy_config.secure_server_config()
-
-# server.yml is the source for user-managed ntfy application settings. Proxy
-# integration and the optional NS8 smarthost are injected at runtime by the
-# systemd service. Remove variables written by older module versions so they
-# cannot unexpectedly override the file.
-for variable in ntfy_config.LEGACY_VARIABLES:
-    agent.unset_env(variable)

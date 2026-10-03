@@ -5,13 +5,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-import os
 import sys
 import json
 import agent
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "pypkg"))
-import ntfy_config
 
 request = json.load(sys.stdin)
 
@@ -23,11 +19,5 @@ for evar in [
         "TRAEFIK_LETS_ENCRYPT",
     ]:
     agent.set_env(evar, original_environment[evar])
-
-# An older backup has no config/server.yml. Restore its legacy ntfy settings
-# temporarily; configure-module migrates them to server.yml and removes them.
-for evar in ntfy_config.LEGACY_VARIABLES:
-    if evar in original_environment:
-        agent.set_env(evar, original_environment[evar])
 
 agent.dump_env()

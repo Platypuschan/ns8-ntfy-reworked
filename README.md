@@ -15,7 +15,7 @@ To install from the command line, use a released version number from
 [`CATALOG_VERSION`](CATALOG_VERSION) or the catalog, for example:
 
 ```bash
-add-module ghcr.io/platypuschan/ntfy-reworked:0.2.2 1
+add-module ghcr.io/platypuschan/ntfy-reworked:0.3.0 1
 ```
 
 The command returns an instance ID such as `ntfy-reworked1`. Use the returned
@@ -23,7 +23,7 @@ ID in the commands below.
 
 Do not install production instances from `:latest` or a branch tag. NS8 takes
 the displayed module version from the image tag and offers updates only to
-instances with a SemVer version such as `0.2.2`; an instance installed from
+instances with a SemVer version such as `0.3.0`; an instance installed from
 `:latest` never receives update notifications.
 
 ## Update
@@ -34,7 +34,7 @@ version number:
 
 ```bash
 api-cli run update-module --data '{
-  "module_url": "ghcr.io/platypuschan/ntfy-reworked:0.2.2",
+  "module_url": "ghcr.io/platypuschan/ntfy-reworked:0.3.0",
   "instances": ["ntfy-reworked1"]
 }'
 ```
@@ -45,8 +45,10 @@ version; afterwards the Software Center offers new catalog versions again.
 `force` is only needed for moving development tags such as `:latest`, because
 it makes NS8 pull the image again even if the tag is already present locally.
 
-When upgrading from an older release, see the data migration notes in
-[Data and backup](#data-and-backup).
+Updates and restores are supported from the base version **0.2.2** onward.
+Older releases of this module and the original NS8 ntfy module
+(`geniusdynamics/ntfy`) cannot be updated to it, and their backups cannot be
+restored. Install a new instance instead.
 
 ## Configure
 
@@ -112,18 +114,7 @@ stopped. Allow enough free space in the volume for a second copy of the
 databases. Attachments in a top-level `attachment-cache-dir` below
 `/var/lib/ntfy` are hard-linked into the snapshot instead of copied, because
 ntfy never modifies an attachment file after writing it.
-Restores of backups made before this snapshot change remain supported.
-
-When upgrading from an older release, the update action converts existing
-`NTFY_*` values to `server.yml` once and then removes those legacy variables.
-Releases before this change stored ntfy data directly in the state directory,
-where it was not backed up. The update stops ntfy briefly and moves those files
-and directories into the `ntfy-data` volume. `ntfy-app.service` does the same
-before every start, so ntfy never starts on the volume while data is still in
-the state directory. If ntfy was nevertheless started on the volume before
-the data moved, the data from the state directory takes precedence:
-directories are merged, and replaced databases are kept next to the moved ones
-as `<name>.replaced-<timestamp>`. Nothing is deleted.
+A restore fails if the backup contains no such snapshot.
 
 ## Reverse proxy
 
@@ -222,13 +213,8 @@ The test scripts accept an NS8 leader node address and a module image URL:
 
 ```bash
 ./test-module-install.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
-./test-module-update.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
 ./test-module-upgrade.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
 ```
-
-The update test starts with the original NS8 ntfy module
-(`ghcr.io/geniusdynamics/ntfy:1.0.0`) and then upgrades to the image supplied
-here, including the migration of legacy data into the `ntfy-data` volume.
 
 The upgrade test starts with the last published release of this module and
 updates it without a forced pull, like the Software Center. It checks that a

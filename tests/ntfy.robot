@@ -4,8 +4,6 @@ Library    String
 
 *** Variables ***
 ${IMAGE_URL}         ghcr.io/platypuschan/ntfy-reworked:latest
-# The update scenario installs the original NS8 module before migrating to this fork.
-${BASELINE_IMAGE}    ghcr.io/geniusdynamics/ntfy:1.0.0
 # The upgrade scenario starts from the last published release of this module;
 # test-module-upgrade.sh looks it up in the registry.
 ${PREVIOUS_IMAGE_URL}    ${EMPTY}
@@ -44,9 +42,7 @@ Configure current module with test server.yml
 
 *** Test Cases ***
 Add module for ${SCENARIO} scenario
-    IF    r'${SCENARIO}' == 'update'
-        Set Local Variable    ${install_image}    ${BASELINE_IMAGE}
-    ELSE IF    r'${SCENARIO}' == 'upgrade'
+    IF    r'${SCENARIO}' == 'upgrade'
         Set Local Variable    ${install_image}    ${PREVIOUS_IMAGE_URL}
     ELSE
         Set Local Variable    ${install_image}    ${IMAGE_URL}
@@ -58,18 +54,7 @@ Add module for ${SCENARIO} scenario
     Set Suite Variable    ${module_id}    ${output.module_id}
 
 Configure initial module
-    IF    r'${SCENARIO}' == 'update'
-        ${payload} =    Evaluate    json.dumps({"host": "${HOST}", "http2https": False, "lets_encrypt": False})    modules=json
-        ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
-        ...    return_rc=True
-        Should Be Equal As Integers    ${rc}    0    baseline configure-module failed: ${output}
-        # The baseline stores ntfy data directly in the state directory.
-        ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'mkdir -p attachments && echo legacy > attachments/ci-marker'
-        ...    return_rc=True    return_stdout=False
-        Should Be Equal As Integers    ${rc}    0
-    ELSE
-        Configure current module with test server.yml
-    END
+    Configure current module with test server.yml
     IF    r'${SCENARIO}' == 'upgrade'
         # Leave a message in the SQLite cache and a file in the data volume.
         Read allocated web port
@@ -82,37 +67,18 @@ Configure initial module
         Should Be Equal As Integers    ${rc}    0
     END
 
-Update module and migrate legacy configuration
+Update module from the previous release
+    Skip If    r'${SCENARIO}' != 'upgrade'    only the upgrade scenario updates the module
     Log    Scenario ${SCENARIO} with ${IMAGE_URL}    console=${True}
-    IF    r'${SCENARIO}' == 'update'
-        ${output}    ${rc} =    Execute Command    api-cli run update-module --data '{"force":true,"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
-        ...    return_rc=True
-        Should Be Equal As Integers    ${rc}    0    update-module ${IMAGE_URL} failed: ${output}
-        # update-module does not fail the task when an update-module.d step fails
-        ${journal} =    Execute Command    journalctl -q --no-pager SYSLOG_IDENTIFIER=agent@${module_id}
-        Should Not Contain    ${journal}    has failed    an update-module.d step failed
-
-        ${payload} =    Evaluate    json.dumps({"host": "${HOST}", "http2https": False, "lets_encrypt": False})    modules=json
-        ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
-        ...    return_rc=True
-        Should Be Equal As Integers    ${rc}    0    migration configure-module failed: ${output}
-
-        ${migration_size} =    Execute Command    runagent -m ${module_id} stat -c '%s' config/server.yml
-        ${migration_size} =    Strip String    ${migration_size}
-        Should Match Regexp    ${migration_size}    ^[1-9][0-9]*$
-
-        Configure current module with test server.yml
-    ELSE IF    r'${SCENARIO}' == 'upgrade'
-        # Same request as the Software Center: no forced pull.
-        ${output}    ${rc} =    Execute Command    api-cli run update-module --data '{"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
-        ...    return_rc=True
-        Should Be Equal As Integers    ${rc}    0    update-module ${IMAGE_URL} failed: ${output}
-        ${journal} =    Execute Command    journalctl -q --no-pager SYSLOG_IDENTIFIER=agent@${module_id}
-        Should Not Contain    ${journal}    has failed    an update-module.d step failed
-        ${image} =    Execute Command    runagent -m ${module_id} printenv IMAGE_URL
-        ${image} =    Strip String    ${image}
-        Should Be Equal    ${image}    ${IMAGE_URL}
-    END
+    # Same request as the Software Center: no forced pull.
+    ${output}    ${rc} =    Execute Command    api-cli run update-module --data '{"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0    update-module ${IMAGE_URL} failed: ${output}
+    ${journal} =    Execute Command    journalctl -q --no-pager SYSLOG_IDENTIFIER=agent@${module_id}
+    Should Not Contain    ${journal}    has failed    an update-module.d step failed
+    ${image} =    Execute Command    runagent -m ${module_id} printenv IMAGE_URL
+    ${image} =    Strip String    ${image}
+    Should Be Equal    ${image}    ${IMAGE_URL}
 
 Check service health after install or update
     Read allocated web port
@@ -174,12 +140,6 @@ Check ntfy data is stored in the backed up volume
     Should Be Equal As Integers    ${rc}    0    cache.db is still in the state directory
     ${include} =    Execute Command    runagent -m ${module_id} sh -c 'cat ../etc/state-include.conf'
     Should Contain    ${include}    volumes/ntfy-data/.ntfy-backup-snapshot
-    IF    r'${SCENARIO}' == 'update'
-        ${output}    ${rc} =    Execute Command    runagent -m ${module_id} sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/attachments/ci-marker"'
-        ...    return_rc=True
-        Should Be Equal As Integers    ${rc}    0    legacy attachments were not migrated: ${output}
-        Should Be Equal    ${output}    legacy
-    END
 
 Check backup snapshot and service restart
     # Attachments are hard-linked into the snapshot inside Podman's user namespace
