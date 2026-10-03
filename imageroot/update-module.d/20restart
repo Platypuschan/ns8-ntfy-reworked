@@ -12,7 +12,6 @@ set -e
 # Redirect any output to the journal (stderr)
 exec 1>&2
 
-# The migration step may have started ntfy just before; clear the start
-# rate limit so this restart cannot hit it.
-systemctl --user reset-failed ntfy.service ntfy-app.service || :
+# Load the unit files of the new release before restarting.
+systemctl --user daemon-reload
 systemctl --user try-restart ntfy.service

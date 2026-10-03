@@ -48,8 +48,7 @@ RESTORE_SCRIPT = r"""
 volume=$1
 config=$2
 snapshot="$volume/.ntfy-backup-snapshot"
-[ -d "$snapshot" ] || exit 0
-[ -d "$snapshot/data" ] || { echo "Incomplete ntfy backup snapshot" >&2; exit 1; }
+[ -d "$snapshot/data" ] || { echo "The backup has no complete ntfy data snapshot" >&2; exit 1; }
 cp -a -- "$snapshot/data/." "$volume/"
 if [ -f "$snapshot/server.yml" ]; then
   mkdir -p -- "${config%/*}"
@@ -67,8 +66,7 @@ rm -rf -- "$volume/.ntfy-backup-snapshot" "$volume/.ntfy-backup-snapshot.tmp"
 
 
 def volume_mountpoint():
-    # The service may not have created the volume yet, or an old backup may
-    # predate it. An empty volume is enough for those cases.
+    # The service may not have created the volume yet.
     subprocess.run(
         ("podman", "volume", "create", "--ignore", DATA_VOLUME),
         check=True, stdout=subprocess.DEVNULL,
@@ -160,16 +158,8 @@ def make_snapshot(state_dir):
 def restore_snapshot(state_dir):
     mountpoint = volume_mountpoint()
     config_path = os.path.join(state_dir, "config", "server.yml")
-    # Old backups have data directly in ntfy-data and need no conversion.
-    # Probe inside the user namespace because the agent may not be able to
-    # traverse the volume directory itself.
-    probe = subprocess.run(
-        ("podman", "unshare", "test", "-d", os.path.join(mountpoint, SNAPSHOT)),
-        check=False,
-    )
-    if probe.returncode == 1:
-        return
-    probe.check_returncode()
+    # RESTORE_SCRIPT runs in Podman's user namespace because the agent may not
+    # be able to traverse the volume directory itself.
     with_ntfy_stopped(
         lambda: run_in_user_namespace(RESTORE_SCRIPT, mountpoint, config_path)
     )

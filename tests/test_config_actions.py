@@ -4,7 +4,6 @@ import json
 import os
 import runpy
 import stat
-import subprocess
 import sys
 import tempfile
 import types
@@ -21,23 +20,17 @@ CONFIGURE_ACTION = (
 GET_CONFIGURATION_ACTION = (
     REPOSITORY_ROOT / "imageroot/actions/get-configuration/20read"
 )
-MIGRATION_ACTION = (
-    REPOSITORY_ROOT / "imageroot/update-module.d/10migrate_server_config"
-)
 DISCOVER_SMARTHOST = REPOSITORY_ROOT / "imageroot/bin/discover-smarthost"
 VALIDATE_ACTION = (
     REPOSITORY_ROOT
     / "imageroot/actions/configure-module/02validate_server_config"
 )
-DATA_MIGRATION = (
-    REPOSITORY_ROOT / "imageroot/update-module.d/15migrate_data_volume"
-)
-START_MIGRATION = REPOSITORY_ROOT / "imageroot/bin/migrate-data-volume"
-UPDATE_RESTART = REPOSITORY_ROOT / "imageroot/update-module.d/20restart"
+RESTORE_COPYENV = REPOSITORY_ROOT / "imageroot/actions/restore-module/06copyenv"
 STATE_INCLUDE = REPOSITORY_ROOT / "imageroot/etc/state-include.conf"
 PYPKG = REPOSITORY_ROOT / "imageroot/pypkg"
 
 sys.path.insert(0, str(PYPKG))
+import ntfy_backup  # noqa: E402
 import ntfy_config  # noqa: E402
 
 try:
@@ -56,10 +49,18 @@ class FakeAgent(types.ModuleType):
         self.smarthost = smarthost
         self.status = None
         self.weights = {}
+        self.environment = {}
+        self.dumped = False
 
     def unset_env(self, variable):
         self.unset_variables.append(variable)
         os.environ.pop(variable, None)
+
+    def set_env(self, variable, value):
+        self.environment[variable] = value
+
+    def dump_env(self):
+        self.dumped = True
 
     def redis_connect(self, **kwargs):
         return kwargs
@@ -105,7 +106,7 @@ class ConfigureActionTests(unittest.TestCase):
         })
 
         with tempfile.TemporaryDirectory() as directory:
-            with action_environment(directory, stdin=payload) as (agent, _):
+            with action_environment(directory, stdin=payload):
                 runpy.run_path(str(CONFIGURE_ACTION), run_name="__main__")
 
             config_path = Path(directory) / "config/server.yml"
@@ -118,34 +119,20 @@ class ConfigureActionTests(unittest.TestCase):
                 stat.S_IMODE(config_path.parent.stat().st_mode),
                 0o700,
             )
-            self.assertIn("NTFY_BASE_URL", agent.unset_variables)
-            self.assertIn("NTFY_UPSTREAM_BASE_URE", agent.unset_variables)
 
-    def test_migrates_legacy_environment_values(self):
+    def test_writes_defaults_for_a_new_instance(self):
         payload = json.dumps({"host": "ntfy.example.org"})
-        environment = {
-            "NTFY_BASE_URL": "https://old.example.org",
-            "NTFY_BEHIND_PROXY": "True",
-            "NTFY_ENABLE_LOGIN": "False",
-            "NTFY_UPSTREAM_BASE_URE": "https://ntfy.sh",
-            "NTFY_UPSTREAM_ACCESS_TOKEN": 'token:with"quotes',
-        }
 
         with tempfile.TemporaryDirectory() as directory:
-            with action_environment(directory, environment, payload):
+            with action_environment(directory, stdin=payload):
                 runpy.run_path(str(CONFIGURE_ACTION), run_name="__main__")
 
-            config = (Path(directory) / "config/server.yml").read_text(
-                encoding="utf-8"
+            config_path = Path(directory) / "config/server.yml"
+            self.assertEqual(
+                config_path.read_text(encoding="utf-8"),
+                ntfy_config.default_config("ntfy.example.org"),
             )
-            self.assertIn('base-url: "https://old.example.org"', config)
-            self.assertNotIn("behind-proxy:", config)
-            self.assertIn("enable-login: false", config)
-            self.assertIn('upstream-base-url: "https://ntfy.sh"', config)
-            self.assertIn(
-                'upstream-access-token: "token:with\\\"quotes"',
-                config,
-            )
+            self.assertEqual(stat.S_IMODE(config_path.stat().st_mode), 0o600)
 
     def test_empty_config_is_supported(self):
         payload = json.dumps({
@@ -248,245 +235,26 @@ class GetConfigurationActionTests(unittest.TestCase):
         )
 
 
-class MigrationActionTests(unittest.TestCase):
-    def test_does_not_overwrite_an_existing_server_yml(self):
+class RestoreEnvironmentTests(unittest.TestCase):
+    def test_restores_only_the_traefik_settings(self):
         environment = {
             "TRAEFIK_HOST": "ntfy.example.org",
-            "NTFY_BASE_URL": "https://legacy.example.org",
+            "TRAEFIK_HTTP2HTTPS": "True",
+            "TRAEFIK_LETS_ENCRYPT": "False",
+            "NTFY_BASE_URL": "https://other.example.org",
         }
+        payload = json.dumps({"environment": environment})
 
         with tempfile.TemporaryDirectory() as directory:
-            config_directory = Path(directory) / "config"
-            config_directory.mkdir()
-            config_path = config_directory / "server.yml"
-            config_path.write_text("keep: this\n", encoding="utf-8")
+            with action_environment(directory, stdin=payload) as (agent, _):
+                runpy.run_path(str(RESTORE_COPYENV), run_name="__main__")
 
-            with action_environment(directory, environment) as (agent, _):
-                runpy.run_path(str(MIGRATION_ACTION), run_name="__main__")
-
-            self.assertEqual(
-                config_path.read_text(encoding="utf-8"),
-                "keep: this\n",
-            )
-            self.assertIn("NTFY_BASE_URL", agent.unset_variables)
-
-    def test_writes_defaults_without_legacy_values(self):
-        environment = {"TRAEFIK_HOST": "ntfy.example.org"}
-
-        with tempfile.TemporaryDirectory() as directory:
-            with action_environment(directory, environment):
-                runpy.run_path(str(MIGRATION_ACTION), run_name="__main__")
-
-            config_path = Path(directory) / "config/server.yml"
-            self.assertEqual(
-                config_path.read_text(encoding="utf-8"),
-                ntfy_config.default_config("ntfy.example.org"),
-            )
-            self.assertEqual(stat.S_IMODE(config_path.stat().st_mode), 0o600)
-
-
-class DataMigrationTests(unittest.TestCase):
-    def test_moves_legacy_data_into_volume_and_keeps_agent_files(self):
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory) / "state"
-            volume = Path(directory) / "volume"
-            (state / "config").mkdir(parents=True)
-            volume.mkdir()
-            (state / "config/server.yml").write_text(
-                'cache-file: "/var/lib/ntfy/custom/messages.db"\n'
-                "auth-file: /var/lib/ntfy/users.db # comment\n",
-                encoding="utf-8",
-            )
-            for name in ("environment", "smarthost.env", "cache.db",
-                         "cache.db-wal", "users.db", "unrelated.txt"):
-                (state / name).write_text(name, encoding="utf-8")
-            (state / "attachments").mkdir()
-            (state / "attachments/abc").write_text("x", encoding="utf-8")
-            (state / "custom").mkdir()
-            (state / "custom/messages.db").write_text("m", encoding="utf-8")
-
-            commands = []
-
-            def fake_run(command, **kwargs):
-                commands.append(tuple(command))
-                if command[:3] == ("podman", "volume", "inspect"):
-                    return types.SimpleNamespace(
-                        returncode=0,
-                        stdout=str(volume) + "\n",
-                    )
-                if command[0] == "mv":
-                    os.rename(command[2], command[3])
-                if "is-active" in command:
-                    return types.SimpleNamespace(returncode=0, stdout="")
-                return types.SimpleNamespace(returncode=0, stdout="")
-
-            with action_environment(state):
-                with patch("subprocess.run", side_effect=fake_run):
-                    runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
-
-            for name in ("cache.db", "cache.db-wal", "users.db",
-                         "attachments/abc", "custom/messages.db"):
-                self.assertTrue((volume / name).exists(), name)
-                self.assertFalse((state / name).exists(), name)
-            for name in ("environment", "smarthost.env", "config/server.yml",
-                         "unrelated.txt"):
-                self.assertTrue((state / name).exists(), name)
-            self.assertIn(("systemctl", "--user", "stop", "ntfy.service", "ntfy-app.service"), commands)
-            self.assertIn(("systemctl", "--user", "start", "ntfy.service"), commands)
-
-    def test_stops_a_start_in_progress_and_prefers_the_original_data(self):
-        # The upstream module crash-loops during the update: ntfy is only
-        # "activating", and a start with the new unit already created an
-        # empty database with a WAL file and an attachments directory.
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory) / "state"
-            volume = Path(directory) / "volume"
-            state.mkdir()
-            (volume / "attachments").mkdir(parents=True)
-            (volume / "auth.db").write_text("empty", encoding="utf-8")
-            (volume / "auth.db-wal").write_text("empty wal", encoding="utf-8")
-            (state / "auth.db").write_text("users", encoding="utf-8")
-            (state / "attachments").mkdir()
-            (state / "attachments/abc").write_text("x", encoding="utf-8")
-            commands = []
-
-            def fake_run(command, check=False, **kwargs):
-                commands.append(tuple(command))
-                if command[:3] == ("podman", "volume", "inspect"):
-                    return types.SimpleNamespace(returncode=0, stdout=str(volume))
-                if command[0] == "mv":
-                    os.rename(command[2], command[3])
-                # is-active fails (activating), is-enabled succeeds
-                returncode = 3 if "is-active" in command else 0
-                return types.SimpleNamespace(returncode=returncode, stdout="")
-
-            with action_environment(state):
-                with patch("subprocess.run", side_effect=fake_run):
-                    runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
-
-            self.assertEqual((volume / "auth.db").read_text(encoding="utf-8"), "users")
-            self.assertFalse((volume / "auth.db-wal").exists())
-            kept = sorted(p.name for p in volume.glob("auth.db*.replaced-*"))
-            self.assertEqual(len(kept), 2, kept)
-            self.assertEqual((volume / "attachments/abc").read_text(encoding="utf-8"), "x")
-            self.assertFalse((state / "attachments").exists())
-            self.assertFalse((state / "auth.db").exists())
-            stop = ("systemctl", "--user", "stop", "ntfy.service", "ntfy-app.service")
-            start = ("systemctl", "--user", "start", "ntfy.service")
-            self.assertLess(commands.index(stop), commands.index(start))
-
-    def test_stays_stopped_if_ntfy_was_neither_active_nor_enabled(self):
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory) / "state"
-            volume = Path(directory) / "volume"
-            state.mkdir()
-            volume.mkdir()
-            (state / "cache.db").write_text("c", encoding="utf-8")
-            commands = []
-
-            def fake_run(command, check=False, **kwargs):
-                commands.append(tuple(command))
-                if command[:3] == ("podman", "volume", "inspect"):
-                    return types.SimpleNamespace(returncode=0, stdout=str(volume))
-                if command[0] == "mv":
-                    os.rename(command[2], command[3])
-                returncode = 1 if ("is-active" in command or "is-enabled" in command) else 0
-                return types.SimpleNamespace(returncode=returncode, stdout="")
-
-            with action_environment(state):
-                with patch("subprocess.run", side_effect=fake_run):
-                    runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
-
-            self.assertTrue((volume / "cache.db").exists())
-            self.assertNotIn(("systemctl", "--user", "start", "ntfy.service"), commands)
-
-    def test_start_failure_after_move_does_not_fail_the_update(self):
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory) / "state"
-            volume = Path(directory) / "volume"
-            state.mkdir()
-            volume.mkdir()
-            (state / "cache.db").write_text("c", encoding="utf-8")
-            commands = []
-
-            def fake_run(command, check=False, **kwargs):
-                commands.append(tuple(command))
-                if command[:3] == ("podman", "volume", "inspect"):
-                    return types.SimpleNamespace(returncode=0, stdout=str(volume))
-                if command[0] == "mv":
-                    os.rename(command[2], command[3])
-                returncode = 1 if command[-2:] == ("start", "ntfy.service") else 0
-                if check and returncode:
-                    raise subprocess.CalledProcessError(returncode, command)
-                return types.SimpleNamespace(returncode=returncode, stdout="")
-
-            with action_environment(state):
-                with patch("subprocess.run", side_effect=fake_run):
-                    runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
-
-            self.assertTrue((volume / "cache.db").exists())
-            reset = ("systemctl", "--user", "reset-failed",
-                     "ntfy.service", "ntfy-app.service")
-            start = ("systemctl", "--user", "start", "ntfy.service")
-            self.assertLess(commands.index(reset), commands.index(start))
-
-    def test_does_nothing_without_legacy_data(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with action_environment(directory):
-                with patch("subprocess.run") as run:
-                    with self.assertRaises(SystemExit) as raised:
-                        runpy.run_path(str(DATA_MIGRATION), run_name="__main__")
-            self.assertEqual(raised.exception.code, 0)
-            run.assert_not_called()
-
-
-class StartMigrationTests(unittest.TestCase):
-    def test_moves_legacy_data_before_start_without_touching_the_service(self):
-        # A restart during the update can run before server.yml exists; the
-        # legacy variables still name custom data paths then.
-        with tempfile.TemporaryDirectory() as directory:
-            state = Path(directory) / "state"
-            volume = Path(directory) / "volume"
-            state.mkdir()
-            volume.mkdir()
-            for name in ("auth.db", "messages.db", "messages.db-wal", "environment"):
-                (state / name).write_text(name, encoding="utf-8")
-            (state / "attachments").mkdir()
-            commands = []
-
-            def fake_run(command, **kwargs):
-                commands.append(tuple(command))
-                if command[:3] == ("podman", "volume", "inspect"):
-                    return types.SimpleNamespace(returncode=0, stdout=str(volume))
-                if command[0] == "mv":
-                    os.rename(command[2], command[3])
-                return types.SimpleNamespace(returncode=0, stdout="")
-
-            legacy = {"NTFY_CACHE_FILE": "/var/lib/ntfy/messages.db"}
-            with action_environment(state, environment=legacy):
-                with patch("subprocess.run", side_effect=fake_run):
-                    runpy.run_path(str(START_MIGRATION), run_name="__main__")
-
-            for name in ("auth.db", "messages.db", "messages.db-wal", "attachments"):
-                self.assertTrue((volume / name).exists(), name)
-                self.assertFalse((state / name).exists(), name)
-            self.assertTrue((state / "environment").exists())
-            self.assertFalse([c for c in commands if c[0] == "systemctl"])
-
-    def test_normal_start_does_not_call_podman(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with action_environment(directory):
-                with patch("subprocess.run") as run:
-                    runpy.run_path(str(START_MIGRATION), run_name="__main__")
-            run.assert_not_called()
-
-    def test_service_migrates_before_the_container_starts(self):
-        unit = SERVICE_UNIT.read_text(encoding="utf-8")
-        # Without "-": if the data cannot be moved, ntfy must not start and
-        # create empty databases in the volume.
-        step = "ExecStartPre=runagent migrate-data-volume\n"
-        self.assertIn(step, unit)
-        self.assertLess(unit.index(step), unit.index("ExecStart=/usr/bin/podman run"))
+        self.assertEqual(agent.environment, {
+            "TRAEFIK_HOST": "ntfy.example.org",
+            "TRAEFIK_HTTP2HTTPS": "True",
+            "TRAEFIK_LETS_ENCRYPT": "False",
+        })
+        self.assertTrue(agent.dumped)
 
 
 class BackupIncludeTests(unittest.TestCase):
@@ -500,15 +268,15 @@ class BackupIncludeTests(unittest.TestCase):
         for line in lines:
             self.assertTrue(line.startswith(("state/", "volumes/")), line)
         self.assertIn(
-            "volumes/" + ntfy_config.DATA_VOLUME + "/.ntfy-backup-snapshot",
+            "volumes/" + ntfy_backup.DATA_VOLUME + "/.ntfy-backup-snapshot",
             lines,
         )
-        self.assertNotIn("volumes/" + ntfy_config.DATA_VOLUME, lines)
+        self.assertNotIn("volumes/" + ntfy_backup.DATA_VOLUME, lines)
         self.assertNotIn("state/" + ntfy_config.CONFIG_PATH, lines)
 
     def test_default_data_paths_are_inside_the_data_volume(self):
         config = ntfy_config.default_config("ntfy.example.org")
-        for option in ntfy_config.DATA_PATH_OPTIONS:
+        for option in ("cache-file", "auth-file", "attachment-cache-dir", "web-push-file"):
             value = ntfy_config.root_scalar(config, option)
             if value:
                 self.assertTrue(value.startswith(ntfy_config.DATA_MOUNT + "/"))
@@ -719,21 +487,12 @@ class ServiceUnitTests(unittest.TestCase):
         unit = SERVICE_UNIT.read_text(encoding="utf-8")
 
         self.assertIn(
-            f"--volume {ntfy_config.DATA_VOLUME}:{ntfy_config.DATA_MOUNT}:Z",
+            f"--volume {ntfy_backup.DATA_VOLUME}:{ntfy_config.DATA_MOUNT}:Z",
             unit,
         )
         self.assertIn("--volume ./config:/etc/ntfy:ro,Z", unit)
         # The state directory holds agent files and must not be exposed
         self.assertNotIn("--volume ./:", unit)
-
-
-class UpdateRestartTests(unittest.TestCase):
-    def test_clears_start_limit_before_restarting(self):
-        script = UPDATE_RESTART.read_text(encoding="utf-8")
-        reset = "systemctl --user reset-failed ntfy.service ntfy-app.service"
-        restart = "systemctl --user try-restart ntfy.service"
-        self.assertIn(reset, script)
-        self.assertLess(script.index(reset), script.index(restart))
 
 
 class StartServicesActionTests(unittest.TestCase):
