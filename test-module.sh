@@ -17,14 +17,14 @@ CONTAINER_NAME="rf-ntfy-${SCENARIO}"
 
 case "${SCENARIO}" in
     install) ;;
-    upgrade)
+    update)
         if [[ -z "${PREVIOUS_IMAGE_URL}" ]]; then
-            echo "The upgrade scenario needs PREVIOUS_IMAGE_URL; run test-module-upgrade.sh." >&2
+            echo "The update scenario needs PREVIOUS_IMAGE_URL; run test-module-update.sh." >&2
             exit 64
         fi
         ;;
     *)
-        echo "Unsupported test scenario '${SCENARIO}'; expected install or upgrade." >&2
+        echo "Unsupported test scenario '${SCENARIO}'; expected install or update." >&2
         exit 64
         ;;
 esac

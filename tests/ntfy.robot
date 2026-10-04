@@ -4,8 +4,8 @@ Library    String
 
 *** Variables ***
 ${IMAGE_URL}         ghcr.io/platypuschan/ntfy-reworked:latest
-# The upgrade scenario starts from the last published release of this module;
-# test-module-upgrade.sh looks it up in the registry.
+# The update scenario starts from the last published release of this module;
+# test-module-update.sh looks it up in the registry.
 ${PREVIOUS_IMAGE_URL}    ${EMPTY}
 ${SCENARIO}          install
 ${HOST}              ntfy.test
@@ -52,7 +52,7 @@ Configure current module with test server.yml
 
 *** Test Cases ***
 Add module for ${SCENARIO} scenario
-    IF    r'${SCENARIO}' == 'upgrade'
+    IF    r'${SCENARIO}' == 'update'
         Set Local Variable    ${install_image}    ${PREVIOUS_IMAGE_URL}
     ELSE
         Set Local Variable    ${install_image}    ${IMAGE_URL}
@@ -65,20 +65,20 @@ Add module for ${SCENARIO} scenario
 
 Configure initial module
     Configure current module with test server.yml
-    IF    r'${SCENARIO}' == 'upgrade'
+    IF    r'${SCENARIO}' == 'update'
         # Leave a message in the SQLite cache and a file in the data volume.
         Read allocated web port
         Wait until ntfy is healthy
-        ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 -d 'before-upgrade' http://127.0.0.1:${web_port}/ci-before-upgrade
+        ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 -d 'before-update' http://127.0.0.1:${web_port}/ci-before-update
         ...    return_rc=True
-        Should Be Equal As Integers    ${rc}    0    publish before upgrade failed: ${output}
-        ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'm="$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)"; mkdir -p "$m/attachments" && echo before-upgrade > "$m/attachments/ci-upgrade-marker"'
+        Should Be Equal As Integers    ${rc}    0    publish before update failed: ${output}
+        ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'm="$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)"; mkdir -p "$m/attachments" && echo before-update > "$m/attachments/ci-update-marker"'
         ...    return_rc=True    return_stdout=False
         Should Be Equal As Integers    ${rc}    0
     END
 
 Update module from the previous release
-    Skip If    r'${SCENARIO}' != 'upgrade'    only the upgrade scenario updates the module
+    Skip If    r'${SCENARIO}' != 'update'    only the update scenario updates the module
     Log    Scenario ${SCENARIO} with ${IMAGE_URL}    console=${True}
     # Same request as the Software Center: no forced pull.
     ${output}    ${rc} =    Execute Command    api-cli run update-module --data '{"module_url":"${IMAGE_URL}","instances":["${module_id}"]}'
@@ -94,16 +94,16 @@ Check service health after install or update
     Read allocated web port
     Wait until ntfy is healthy
 
-Check data kept by the upgrade
-    Skip If    r'${SCENARIO}' != 'upgrade'    only the upgrade scenario has data from the previous release
-    ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 'http://127.0.0.1:${web_port}/ci-before-upgrade/json?poll=1'
+Check data kept by the update
+    Skip If    r'${SCENARIO}' != 'update'    only the update scenario has data from the previous release
+    ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 'http://127.0.0.1:${web_port}/ci-before-update/json?poll=1'
     ...    return_rc=True
-    Should Be Equal As Integers    ${rc}    0    poll after upgrade failed: ${output}
-    Should Contain    ${output}    "message":"before-upgrade"
-    ${output}    ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/attachments/ci-upgrade-marker"'
+    Should Be Equal As Integers    ${rc}    0    poll after update failed: ${output}
+    Should Contain    ${output}    "message":"before-update"
+    ${output}    ${rc} =    Execute Command    runagent -m ${module_id} podman unshare sh -c 'cat "$(podman volume inspect --format "{{.Mountpoint}}" ntfy-data)/attachments/ci-update-marker"'
     ...    return_rc=True
-    Should Be Equal As Integers    ${rc}    0    volume file lost by the upgrade: ${output}
-    Should Be Equal    ${output}    before-upgrade
+    Should Be Equal As Integers    ${rc}    0    volume file lost by the update: ${output}
+    Should Be Equal    ${output}    before-update
 
 Check server.yml persistence and read-only mount
     ${mode} =    Execute Command    runagent -m ${module_id} stat -c '%a' config/server.yml

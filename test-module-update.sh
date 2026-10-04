@@ -16,4 +16,4 @@ export PREVIOUS_IMAGE_URL
 exec bash ./test-module.sh \
     "${1:?missing leader node address}" \
     "${IMAGE_URL}" \
-    upgrade
+    update
