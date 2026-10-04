@@ -33,6 +33,10 @@ jobs:
           - distro: debian13
             scenario: update
             script: test-module-update.sh
+    # statuses: write lets each leg report continuous-integration/qemu/<distro>-<scenario>.
+    permissions:
+      contents: read
+      statuses: write
     uses: NethServer/ns8-github-actions/.github/workflows/test-on-qemu.yml@v1
     with:
       distro: ${{ matrix.distro }}
@@ -40,5 +44,6 @@ jobs:
       repo_ref: ${{ needs.module.outputs.sha }}
       version_tag: ${{ needs.module.outputs.tag }}
       artifact_suffix: ${{ matrix.scenario }}
+      status_suffix: ${{ matrix.scenario }}
       script: ${{ matrix.script }}
       timeout_minutes: 60
