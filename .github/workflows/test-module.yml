@@ -15,24 +15,15 @@ jobs:
     uses: NethServer/ns8-github-actions/.github/workflows/module-info.yml@v1
 
   qemu:
-    name: "NS8 ${{ matrix.distro }} / ${{ matrix.scenario }}"
+    # Static: a skipped job shows its name with the matrix expressions
+    # unexpanded. The called job adds "<scenario> <distro>".
+    name: NS8
     needs: module
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - distro: rocky9
-            scenario: install
-            script: test-module-install.sh
-          - distro: rocky9
-            scenario: update
-            script: test-module-update.sh
-          - distro: debian13
-            scenario: install
-            script: test-module-install.sh
-          - distro: debian13
-            scenario: update
-            script: test-module-update.sh
+        distro: [rocky9, debian13]
+        scenario: [install, update]
     # statuses: write lets each leg report continuous-integration/qemu/<distro>-<scenario>.
     permissions:
       contents: read
@@ -45,5 +36,5 @@ jobs:
       version_tag: ${{ needs.module.outputs.tag }}
       artifact_suffix: ${{ matrix.scenario }}
       status_suffix: ${{ matrix.scenario }}
-      script: ${{ matrix.script }}
+      script: test-module-${{ matrix.scenario }}.sh
       timeout_minutes: 60
