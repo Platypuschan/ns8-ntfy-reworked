@@ -213,10 +213,10 @@ The test scripts accept an NS8 leader node address and a module image URL:
 
 ```bash
 ./test-module-install.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
-./test-module-upgrade.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
+./test-module-update.sh <NODE_ADDR> ghcr.io/platypuschan/ntfy-reworked:latest
 ```
 
-The upgrade test starts with the last published release of this module and
+The update test starts with the last published release of this module and
 updates it without a forced pull, like the Software Center. It checks that a
 cached message and a file in the `ntfy-data` volume survive.
 `.github/scripts/previous-release` looks the release up in GHCR: the newest

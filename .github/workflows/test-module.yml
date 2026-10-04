@@ -24,25 +24,26 @@ jobs:
           - distro: rocky9
             scenario: install
             script: test-module-install.sh
-            cloud_image_url: ""
           - distro: rocky9
-            scenario: upgrade
-            script: test-module-upgrade.sh
-            cloud_image_url: ""
+            scenario: update
+            script: test-module-update.sh
           - distro: debian13
             scenario: install
             script: test-module-install.sh
-            cloud_image_url: "https://laotzu.ftp.acc.umu.se/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2"
           - distro: debian13
-            scenario: upgrade
-            script: test-module-upgrade.sh
-            cloud_image_url: "https://laotzu.ftp.acc.umu.se/images/cloud/trixie/20260914-2601/debian-13-genericcloud-amd64-20260914-2601.qcow2"
-    uses: stephdl/ns8-ci-actions/.github/workflows/test-on-qemu.yml@3726dd2374c4fd2a267345d4ac975388a4bed7af
+            scenario: update
+            script: test-module-update.sh
+    # statuses: write lets each leg report continuous-integration/qemu/<distro>-<scenario>.
+    permissions:
+      contents: read
+      statuses: write
+    uses: NethServer/ns8-github-actions/.github/workflows/test-on-qemu.yml@v1
     with:
       distro: ${{ matrix.distro }}
-      cloud_image_url: ${{ matrix.cloud_image_url }}
       image_url: ${{ needs.module.outputs.image }}
       repo_ref: ${{ needs.module.outputs.sha }}
-      version_tag: ${{ needs.module.outputs.tag }}-${{ matrix.scenario }}
+      version_tag: ${{ needs.module.outputs.tag }}
+      artifact_suffix: ${{ matrix.scenario }}
+      status_suffix: ${{ matrix.scenario }}
       script: ${{ matrix.script }}
       timeout_minutes: 60
