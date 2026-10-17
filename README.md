@@ -233,3 +233,11 @@ Unit tests for actions and helpers need PyYAML, which the NS8 agent provides:
 python3 -m pip install PyYAML==6.0.3
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
+
+## Minimum NS8 core version
+
+This module requires NS8 core **3.22.0** or newer. This conservative minimum
+matches the core version recorded by the existing successful QEMU installation
+[tests](https://github.com/Platypuschan/ns8-ntfy-reworked/actions/runs/37214325103);
+compatibility with older cores has not been verified. The module image
+declares this requirement in `org.nethserver.min-core`.
