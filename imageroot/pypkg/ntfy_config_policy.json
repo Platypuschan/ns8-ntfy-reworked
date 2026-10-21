@@ -1,0 +1,18 @@
+{
+  "managed_keys": [
+    "auth-users",
+    "auth-tokens",
+    "auth-access",
+    "database-url",
+    "behind-proxy",
+    "proxy-forwarded-header",
+    "firebase-key-file",
+    "stripe-webhook-key"
+  ],
+  "managed_prefixes": [
+    "smtp-sender-",
+    "upstream-"
+  ],
+  "secret_pattern": "(?:^|-)(?:password|pass|token|secret|private-key)(?:$|-)",
+  "option_pattern": "^[a-z][a-z0-9-]*$"
+}

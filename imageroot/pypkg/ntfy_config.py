@@ -80,17 +80,15 @@ def read_server_config():
 
 # These values are maintained outside the editor. Keep existing installations'
 # values in the same private, backed-up server.yml; never send them to the UI.
-MANAGED_KEYS = {
-    "auth-users", "auth-tokens", "auth-access", "database-url",
-    "behind-proxy", "proxy-forwarded-header", "firebase-key-file",
-    "stripe-webhook-key",
-}
+with open(os.path.join(os.path.dirname(__file__), "ntfy_config_policy.json"), encoding="utf-8") as policy_file:
+    CONFIG_POLICY = json.load(policy_file)
+MANAGED_KEYS = frozenset(CONFIG_POLICY["managed_keys"])
 
 
 def managed_key(key):
     key = key.replace("_", "-").lower()
-    return (key in MANAGED_KEYS or key.startswith(("smtp-sender-", "upstream-"))
-            or bool(re.search(r"(?:^|-)(?:password|pass|token|secret|private-key)(?:$|-)", key)))
+    return (key in MANAGED_KEYS or key.startswith(tuple(CONFIG_POLICY["managed_prefixes"]))
+            or bool(re.search(CONFIG_POLICY["secret_pattern"], key)))
 
 
 def parse_config(content):
@@ -136,7 +134,7 @@ def dump_config(config):
 def validate_server_config(content):
     try:
         parsed = parse_config(content)
-        if any(not re.fullmatch(r"[a-z][a-z0-9-]*", key) for key in parsed):
+        if any(not re.fullmatch(CONFIG_POLICY["option_pattern"], key) for key in parsed):
             return "Use canonical lowercase YAML option names with hyphens"
         if any(managed_key(key) for key in parsed):
             return "The YAML contains settings managed outside the editor"

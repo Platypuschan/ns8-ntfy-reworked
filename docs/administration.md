@@ -10,6 +10,8 @@ or update migration. Existing private values are filtered from get-configuration
 and merged back server-side on configure-module. No masked placeholder is sent
 back as a real credential. Invalid existing YAML fails closed; error text omits
 source lines. YAML comments are excluded from the editable representation.
+The browser uses the same reserved-option policy and rejects invalid YAML before
+creating a task; the backend validates independently for direct API clients.
 
 Reserved settings include `smtp-sender-*`, `upstream-*`, `auth-users`,
 `auth-tokens`, `auth-access`, `database-url`, private credential keys and the
@@ -118,6 +120,7 @@ TLS/network path during the NS8 integration test.
   provisioned accounts, token limits and last-admin protection.
 - Optional `NTFY_TEST_BINARY` integration runs native CLI, SQLite, HTTP and SMTP
   against v2.28.0, substituting only the Podman/systemd process boundary.
+- Browser-side YAML validation has three additional Node test groups.
 - UI lint and production build are separate checks. No deployed NS8 UI test,
   NS8 update/restore VM test or iOS device test was performed for this change.
 

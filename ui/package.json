@@ -5,8 +5,9 @@
   "scripts": {
     "serve": "vite",
     "build": "vite build",
-    "lint": "eslint --ext .js,.vue src",
-    "watch": "vite build --watch"
+    "lint": "eslint --ext .js,.mjs,.vue src",
+    "watch": "vite build --watch",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@carbon/icons-vue": "^10.37.0",
@@ -23,7 +24,8 @@
     "vue-debounce": "^4.0.0",
     "vue-i18n": "^8.24.4",
     "vue-router": "^3.2.0",
-    "vuex": "^3.4.0"
+    "vuex": "^3.4.0",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

@@ -125,6 +125,8 @@
 
 <script>
 import to from "await-to-js";
+import { validateServerConfig } from "../configValidation.mjs";
+import configPolicy from "../../../imageroot/pypkg/ntfy_config_policy.json";
 import { mapState } from "vuex";
 import {
   QueryParamService,
@@ -269,6 +271,13 @@ export default {
         if (isValidationOk) {
           this.focusElement("host");
         }
+        isValidationOk = false;
+      }
+      if (!validateServerConfig(this.serverConfig, configPolicy)) {
+        this.error.server_config = this.$t("settings.invalid_server_config");
+        this.isAdvancedOpen = true;
+        this.advancedAccordionKey += 1;
+        this.$nextTick(() => this.focusElement("server_config"));
         isValidationOk = false;
       }
       return isValidationOk;
