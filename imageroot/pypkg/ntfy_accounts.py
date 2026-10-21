@@ -104,7 +104,7 @@ def validate_request(data):
         label = data.get("label", "")
         if not isinstance(label, str) or len(label) > 80 or any(ord(c) < 32 for c in label):
             raise AccountError("invalid_account_request")
-        if data.get("expires", "30d") not in {"1d", "7d", "30d", "90d", "365d", "never"}:
+        if data.get("expires", "never") not in {"1d", "7d", "30d", "90d", "365d", "never"}:
             raise AccountError("invalid_account_request")
     if operation == "remove-token" and not re.fullmatch(r"[a-f0-9]{64}", str(data.get("id", ""))):
         raise AccountError("invalid_account_request")
@@ -142,7 +142,7 @@ def _manage_account(data):
         if sum(t["username"] == username for t in parse_tokens(cli("token", "list"))) >= 60:
             raise AccountError("token_limit")
         args = ["token", "add", "--label", data.get("label", "")]
-        expiry = data.get("expires", "30d")
+        expiry = data.get("expires", "never")
         if expiry != "never":
             args += ["--expires", expiry]
         output = cli(*args, username)

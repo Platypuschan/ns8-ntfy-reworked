@@ -162,6 +162,7 @@ passwords have no display or reveal control. A newly generated password
 is shown directly in the creation/reset result for copying, then discarded when
 that result is dismissed or the page is left. Newly generated tokens are masked
 by default and can be revealed/copied in their creation result.
+New tokens default to unlimited validity (Never); a finite lifetime remains selectable.
 The last administrator cannot be deleted through this page.
 
 A new installation uses `deny-all`; regular users need explicit topic rights.

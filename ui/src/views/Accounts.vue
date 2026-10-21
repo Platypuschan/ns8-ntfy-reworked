@@ -189,7 +189,7 @@
               :disabled="busy"
             >
               <option
-                v-for="expiry in ['1d', '7d', '30d', '90d', '365d', 'never']"
+                v-for="expiry in ['never', '1d', '7d', '30d', '90d', '365d']"
                 :key="expiry"
                 :value="expiry"
               >
@@ -322,7 +322,7 @@ export default {
       usernameError: "",
       tokenUser: "",
       label: "",
-      expires: "30d",
+      expires: "never",
       accessUser: "",
       topic: "",
       topicError: "",

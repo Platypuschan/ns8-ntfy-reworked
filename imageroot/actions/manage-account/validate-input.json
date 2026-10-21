@@ -36,7 +36,8 @@
         "90d",
         "365d",
         "never"
-      ]
+      ],
+      "default": "never"
     },
     "id": {
       "type": "string",

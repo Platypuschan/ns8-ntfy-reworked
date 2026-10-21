@@ -230,7 +230,15 @@ Module UI loads in cluster-admin
     Go To    https://${NODE_ADDR}/cluster-admin/#/apps/${module_id}?page=accounts
     Wait For Elements State    iframe >>> h2 >> text="Users and tokens"    visible    timeout=20s
     Wait For Elements State    iframe >>> td >> text="ci-worker" >> nth=0    visible    timeout=30s
+    Get Property    iframe >>> select#token-expiry    value    ==    never
     Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/3._Accounts.png
+    # A tall viewport also expands the module iframe, so the complete account,
+    # token and ACL sections fit in a single review image.
+    Set Viewport Size    1280    2600
+    Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/4._Accounts_full.png    fullPage=True
+    Set Viewport Size    1280    720
+    Scroll To Element    iframe >>> select#token-user
+    Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/5._Tokens.png
     Close Browser
 
 Remove module
