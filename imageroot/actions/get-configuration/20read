@@ -28,5 +28,8 @@ if os.path.exists(ntfy_config.CONFIG_PATH):
 else:
     config["server_config"] = ntfy_config.default_config(config["host"])
 
+config["ios_push"] = bool(ntfy_config.parse_config(config["server_config"]).get("upstream-base-url"))
+config["server_config"] = ntfy_config.editable_config(config["server_config"])
+
 # Dump the configuration to stdout
 json.dump(config, fp=sys.stdout)

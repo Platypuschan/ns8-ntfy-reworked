@@ -16,10 +16,13 @@ import ntfy_config
 # If parsing fails, output everything to stderr
 data = json.load(sys.stdin)
 
+previous = ntfy_config.read_server_config()
 server_config = data.get("server_config")
-if server_config is not None:
-    ntfy_config.write_server_config(server_config)
-elif not os.path.exists(ntfy_config.CONFIG_PATH):
-    ntfy_config.write_server_config(ntfy_config.default_config(data.get("host", "")))
-else:
-    ntfy_config.secure_server_config()
+if server_config is None:
+    if not os.path.exists(ntfy_config.CONFIG_PATH):
+        server_config = ntfy_config.default_config(data.get("host", ""))
+    else:
+        server_config = ntfy_config.editable_config(previous)
+ntfy_config.write_server_config(ntfy_config.merge_configuration(
+    server_config, previous, data.get("ios_push")
+))

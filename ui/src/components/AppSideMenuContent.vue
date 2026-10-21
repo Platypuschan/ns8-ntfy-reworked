@@ -29,6 +29,13 @@
         <span>{{ $t("settings.title") }}</span>
       </cv-side-nav-link>
       <cv-side-nav-link
+        @click="goToAppPage(instanceName, 'accounts')"
+        :class="{ 'current-page': isLinkActive('accounts') }"
+      >
+        <template v-slot:nav-icon><Settings20 /></template>
+        <span>{{ $t("accounts.title") }}</span>
+      </cv-side-nav-link>
+      <cv-side-nav-link
         @click="goToAppPage(instanceName, 'about')"
         :class="{ 'current-page': isLinkActive('about') }"
       >

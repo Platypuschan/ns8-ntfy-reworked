@@ -210,7 +210,8 @@ class GetConfigurationActionTests(unittest.TestCase):
                 )
                 result = json.loads(output.getvalue())
 
-            self.assertEqual(result["server_config"], expected)
+            self.assertEqual(result["server_config"], ntfy_config.editable_config(expected))
+            self.assertEqual((config_directory / "server.yml").read_text(), expected)
             self.assertTrue(result["http2https"])
             self.assertFalse(result["lets_encrypt"])
 
@@ -227,10 +228,10 @@ class GetConfigurationActionTests(unittest.TestCase):
 
         self.assertEqual(
             result["server_config"],
-            ntfy_config.default_config("ntfy.example.org"),
+            ntfy_config.editable_config(ntfy_config.default_config("ntfy.example.org")),
         )
         self.assertIn(
-            'base-url: "https://ntfy.example.org"',
+            'base-url: https://ntfy.example.org',
             result["server_config"],
         )
 
