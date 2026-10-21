@@ -62,7 +62,8 @@ availability, Internet access and the app's connectivity still matter.
 
 ## Mail-to-push on NS8
 
-**Feasible, with moderate module work; not enabled by this change.**
+**Feasible for authenticated internal senders with moderate module work; not
+enabled by this change. Public incoming mail needs additional domain handling.**
 
 ntfy v2.28.0 has a lightweight incoming SMTP server. It turns mail into a normal
 publish request and uses normal topic authorization. The source supports both
@@ -80,6 +81,16 @@ Mail is present is:
    supports a target hostname/port and optional SMTP authentication.
 4. Use a dedicated ntfy integration user with write-only rights to selected
    topics. Avoid a full ntfy administrator token.
+
+This relay path is established for authenticated or IP-authorized senders.
+A recipient relay rule changes the next hop; it does **not** itself grant public
+relay authorization for a new external domain. For arbitrary Internet senders,
+the Mail application must also accept that domain and its recipients and route
+them to ntfy instead of a local mailbox. Current Mail domain actions expose
+local-domain options, not a general remote-transport setting. That additional
+public-reception integration is therefore not established by the relay UI alone
+and needs a separate implementation/test. Merely adding a local domain can
+cause local mailbox delivery or unknown-recipient rejection instead of forwarding.
 
 For Mail and ntfy on the same node, localhost can be considered only after
 checking the Mail container network context; another container's localhost is
@@ -117,6 +128,8 @@ Sources:
 - [Pinned token CLI](https://github.com/binwiederhier/ntfy/blob/v2.28.0/cmd/token.go)
 - [Pinned ACL CLI](https://github.com/binwiederhier/ntfy/blob/v2.28.0/cmd/access.go)
 - [Pinned SMTP implementation](https://github.com/binwiederhier/ntfy/blob/v2.28.0/server/smtp_server.go)
+- [Mail relay-domain generation](https://github.com/NethServer/ns8-mail/blob/main/postfix/usr/local/bin/reload-config)
+- [Mail domain schema](https://github.com/NethServer/ns8-mail/blob/main/imageroot/validator-definitions.json)
 - [NS8 Mail relay rules](https://docs.nethserver.org/docs/administrator-manual/applications/mail)
 - [NS8 firewall](https://docs.nethserver.org/docs/administrator-manual/configuration/firewall)
 - UI reference: [Termine2 settings at 29838a3](https://github.com/Platypuschan/ns8-termine2/blob/29838a38c53e5ac3e313ebd94e07a0b774508709/ui/src/views/Settings.vue)

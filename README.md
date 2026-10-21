@@ -249,8 +249,10 @@ Incoming email publishing is unrelated to the NS8 smarthost. ntfy supports
 `smtp-server-*`, but this module currently publishes only HTTP; setting those
 options alone does not make SMTP reachable. A separate module integration is
 needed. [The implementation assessment](docs/administration.md#mail-to-push-on-ns8)
-describes a recipient relay through the NS8 Mail application, avoiding a second
-public port 25 listener.
+describes a recipient relay through the NS8 Mail application for authenticated
+or IP-authorized internal senders, avoiding a second public port 25 listener.
+Accepting arbitrary Internet mail for a new push domain additionally needs domain
+and recipient acceptance/routing; a relay rule alone does not enable that.
 
 ## Debug
 
