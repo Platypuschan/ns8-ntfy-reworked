@@ -135,15 +135,15 @@ Reject duplicate and module-managed YAML options
 
 Manage accounts through NS8 actions
     # Do not record generated credentials in Robot's command output.
-    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"add-user","username":"ci-worker"}'
+    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"add-user","username":"ci-worker"}' >/dev/null
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0
     Wait until ntfy is healthy
-    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"reset-password","username":"ci-worker"}'
+    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"reset-password","username":"ci-worker"}' >/dev/null
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0
     Wait until ntfy is healthy
-    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"add-token","username":"ci-worker","label":"ci-monitoring","expires":"1d"}'
+    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"add-token","username":"ci-worker","label":"ci-monitoring","expires":"1d"}' >/dev/null
     ...    return_rc=True    return_stdout=False
     Should Be Equal As Integers    ${rc}    0
     Wait until ntfy is healthy
@@ -154,6 +154,10 @@ Manage accounts through NS8 actions
     Should Contain    ${output}    ci-monitoring
     Should Not Contain    ${output}    tk_
     Should Not Contain    ${output}    "password"
+    ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/list-accounts --data '{}'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    Should Contain    ${output}    ci-monitoring
 
 Check public HTTP route
     ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 --resolve ${HOST}:80:127.0.0.1 http://${HOST}/v1/health
