@@ -61,6 +61,21 @@
                 $t("settings.enabled")
               }}</template>
             </cv-toggle>
+            <cv-toggle
+              value="iosPush"
+              :label="$t('settings.ios_push')"
+              v-model="iosPush"
+              :disabled="loading.getConfiguration || loading.configureModule"
+              class="mg-bottom"
+            >
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
+            </cv-toggle>
+            <p class="mg-bottom">{{ $t("settings.ios_push_help") }}</p>
             <!-- advanced options -->
             <cv-accordion ref="accordion" class="maxwidth mg-bottom">
               <cv-accordion-item
@@ -141,6 +156,7 @@ export default {
       isLetsEncryptEnabled: false,
       isHttpToHttpsEnabled: true,
       serverConfig: "",
+      iosPush: false,
       isAdvancedOpen: false,
       advancedAccordionKey: 0,
       loading: {
@@ -238,6 +254,7 @@ export default {
       this.isLetsEncryptEnabled = config.lets_encrypt;
       this.isHttpToHttpsEnabled = config.http2https;
       this.serverConfig = config.server_config;
+      this.iosPush = config.ios_push;
 
       this.loading.getConfiguration = false;
       this.focusElement("host");
@@ -313,6 +330,7 @@ export default {
             lets_encrypt: this.isLetsEncryptEnabled,
             http2https: this.isHttpToHttpsEnabled,
             server_config: this.serverConfig,
+            ios_push: this.iosPush,
           },
           extra: {
             title: this.$t("settings.instance_configuration", {

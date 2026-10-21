@@ -37,8 +37,12 @@
         "server_config": {
             "type": "string",
             "title": "ntfy server.yml",
-            "description": "Complete ntfy server configuration in YAML format",
+            "description": "Editable YAML settings, excluding secrets and module-managed options",
             "maxLength": 1048576
+        },
+        "ios_push": {
+            "type": "boolean",
+            "description": "Enable iOS wake-up requests through ntfy.sh (or the existing upstream)."
         }
     }
 }

@@ -145,24 +145,25 @@ def attachment_directory(config_path):
 
 
 def make_snapshot(state_dir):
-    mountpoint = volume_mountpoint()
-    config_path = os.path.join(state_dir, "config", "server.yml")
-    attachments = attachment_directory(config_path)
-    with_ntfy_stopped(
-        lambda: run_in_user_namespace(
-            SNAPSHOT_SCRIPT, mountpoint, config_path, attachments
+    with ntfy_config.state_lock(state_dir):
+        mountpoint = volume_mountpoint()
+        config_path = os.path.join(state_dir, "config", "server.yml")
+        attachments = attachment_directory(config_path)
+        with_ntfy_stopped(
+            lambda: run_in_user_namespace(
+                SNAPSHOT_SCRIPT, mountpoint, config_path, attachments
+            )
         )
-    )
 
 
 def restore_snapshot(state_dir):
-    mountpoint = volume_mountpoint()
-    config_path = os.path.join(state_dir, "config", "server.yml")
-    # RESTORE_SCRIPT runs in Podman's user namespace because the agent may not
-    # be able to traverse the volume directory itself.
-    with_ntfy_stopped(
-        lambda: run_in_user_namespace(RESTORE_SCRIPT, mountpoint, config_path)
-    )
+    with ntfy_config.state_lock(state_dir):
+        mountpoint = volume_mountpoint()
+        config_path = os.path.join(state_dir, "config", "server.yml")
+        # The agent may not be able to traverse subordinate UID directories.
+        with_ntfy_stopped(
+            lambda: run_in_user_namespace(RESTORE_SCRIPT, mountpoint, config_path)
+        )
 
 
 def cleanup_snapshot():

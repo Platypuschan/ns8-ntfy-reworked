@@ -1,7 +1,8 @@
 # ntfy for NethServer 8
 
 This repository packages [ntfy](https://ntfy.sh/) for NethServer 8. The module
-provides a Traefik route, an editor for ntfy's `server.yml`, backup and restore,
+provides a Traefik route, user/token/topic administration, an editor for public
+ntfy settings, backup and restore,
 and optional outgoing mail through the NS8 smarthost. It runs the
 `docker.io/binwiederhier/ntfy:v2.28.0` image.
 
@@ -56,14 +57,23 @@ Assume the instance ID is `ntfy-reworked1`. Configuration accepts:
 - `host`: a fully qualified domain name for the application
 - `http2https`: enable or disable HTTP to HTTPS redirection (true/false)
 - `lets_encrypt`: enable or disable Let's Encrypt certificate (true/false)
-- `server_config`: the complete contents of ntfy's `server.yml` (optional for
-  backward-compatible API calls)
+- `server_config`: editable YAML options, excluding secrets and module-managed
+  settings (optional; omitted settings preserve the existing configuration)
+- `ios_push`: enable iOS wake-up forwarding (optional; omission preserves its state)
 
 The web interface exposes `server_config` as a multiline editor under
-**Advanced**. The YAML file is the source of truth for user-managed ntfy
-settings. A small set of `NTFY_*` environment variables is reserved for the
-NS8 reverse-proxy and smarthost integrations described below. See the
-[ntfy configuration reference](https://docs.ntfy.sh/config/#config-options).
+**Advanced**. This is a filtered view of the private `config/server.yml`, not
+the entire file. SMTP sender settings, upstream options, declarative auth
+entries, private keys and other secret options are not returned to the UI.
+Existing hidden values remain in the private file when saving the editor.
+NS8 reverse-proxy options are reserved and cannot be overwritten in the editor.
+Only canonical lowercase option names with hyphens are accepted.
+
+The editor rejects duplicate keys at every nesting level, YAML aliases, merge
+keys and protected options. Errors never echo YAML source lines. Comments and
+formatting are not preserved in the filtered view, since comments can also
+contain credentials. Ambiguous existing files must be corrected on the NS8
+node before configuration can proceed. See [administration details](docs/administration.md).
 
 Example `server.yml` for a private installation (replace the hostname):
 
@@ -92,7 +102,7 @@ The command starts ntfy, creates its Traefik route and saves `server.yml` in
 `state/config/server.yml` with mode `0600`.
 
 The config directory is mounted read-only at `/etc/ntfy` inside the ntfy
-container. `configure-module` rejects a `server_config` that is not valid YAML
+container. `configure-module` rejects a `server_config` that is ambiguous or invalid YAML, contains protected options,
 or whose top level is not a mapping, with the `invalid_server_config`
 validation error. Invalid ntfy option values are only detected by ntfy itself;
 inspect the module service log after changing advanced settings.
@@ -142,6 +152,46 @@ Retrieve the current module settings with:
 api-cli run module/ntfy-reworked1/get-configuration
 ```
 
+## Users, tokens and topic access
+
+Open **Users and tokens** in the NS8 module UI after configuring ntfy. It lists
+users and roles, tokens (label and expiry only), and topic ACLs. Create users
+with generated passwords, generate replacement passwords, create tokens with
+an expiry, revoke tokens, and grant or remove topic permissions. Passwords and
+tokens are masked by default; only newly generated values can be shown/copied.
+The last administrator cannot be deleted through this page.
+
+A new installation uses `deny-all`; regular users need explicit topic rights.
+An ntfy administrator can access all topics. Tokens inherit their user's
+permissions, so use separate integration users for different privileges.
+Changing a password does **not** revoke existing tokens; revoke them separately.
+Account changes briefly restart ntfy to refresh any configured access cache.
+
+Existing declaratively provisioned accounts/tokens/ACLs remain intact and are
+marked as configured on the server. Their protected properties are read-only
+in the UI. They can still be maintained in the private `config/server.yml` on
+the NS8 node. No implicit conversion or deletion of provisioned users occurs.
+
+Creation results contain the new credential so the administrator can copy it.
+List/configuration actions never return existing passwords or raw tokens.
+The UI forgets the displayed credential on navigation/dismissal. **NS8 can
+retain task results**, so this is a one-time display in the page, not a
+cryptographic single-use retrieval guarantee. Do not share creation task results.
+ntfy itself stores tokens in its authentication database; this module does not
+change the upstream token storage format.
+
+## iOS notifications
+
+Enable **iOS instant notifications** in Settings to send wake-up requests via
+`https://ntfy.sh`. An existing custom upstream URL is preserved. Disabling the
+switch removes only the upstream URL, preserving an existing private upstream
+token. The switch does not expose that token. A token is normally unnecessary
+unless the upstream requires authentication or higher limits are needed.
+
+The official iOS app needs the external push infrastructure for timely
+notifications. The upstream receives `poll_request` messages, not the actual
+notification contents. The app retrieves those contents from your server.
+
 ## Web Push
 
 Generate a unique key pair inside your instance:
@@ -150,17 +200,17 @@ Generate a unique key pair inside your instance:
 runagent -m ntfy-reworked1 podman exec ntfy-app ntfy webpush keys
 ```
 
-Copy the generated values into the Advanced YAML editor. Replace the
-placeholders with your own values; keep the private key private:
+Set `web-push-private-key` directly in the instance's private
+`config/server.yml` on the NS8 node. Private keys are rejected by the UI
+editor. Public options can be set in the editor:
 
 ```yaml
 web-push-public-key: "<generated-public-key>"
-web-push-private-key: "<generated-private-key>"
 web-push-file: "/var/lib/ntfy/webpush.db"
 web-push-email-address: "admin@example.test"
 ```
 
-Use your real contact email address for `web-push-email-address`.
+Use your real contact address. Restart ntfy after direct file changes.
 
 ## Uninstall
 
@@ -191,8 +241,16 @@ configured for implicit TLS is therefore not injected and a warning is written
 to the service journal. If the NS8 smarthost is disabled, all manual
 `smtp-sender-*` settings in `server.yml` remain effective.
 
-Incoming email publishing is unrelated to the NS8 smarthost. Configure its
-`smtp-server-*` options directly in the Advanced YAML editor.
+SMTP sender options are hidden from the editor and preserved when saving.
+Manual changes to these options must be made in the private `config/server.yml`
+on the NS8 node. Existing explicit relay settings continue to take precedence.
+
+Incoming email publishing is unrelated to the NS8 smarthost. ntfy supports
+`smtp-server-*`, but this module currently publishes only HTTP; setting those
+options alone does not make SMTP reachable. A separate module integration is
+needed. [The implementation assessment](docs/administration.md#mail-to-push-on-ns8)
+describes a recipient relay through the NS8 Mail application, avoiding a second
+public port 25 listener.
 
 ## Debug
 
@@ -241,3 +299,12 @@ matches the core version recorded by the existing successful QEMU installation
 [tests](https://github.com/Platypuschan/ns8-ntfy-reworked/actions/runs/37214325103);
 compatibility with older cores has not been verified. The module image
 declares this requirement in `org.nethserver.min-core`.
+
+For a local CLI/HTTP/SMTP integration check against the packaged upstream version:
+
+```bash
+NTFY_TEST_BINARY=/path/to/ntfy-v2.28.0 \
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+This substitutes only Podman/systemd; it does not replace NS8 lifecycle/UI tests.
