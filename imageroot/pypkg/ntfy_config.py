@@ -155,10 +155,16 @@ def merge_configuration(content, previous, ios_push=None):
         raise ValueError(error)
     hidden = {key: value for key, value in parse_config(previous).items()
               if managed_key(key)}
+    # Preserve the target in private module metadata when disabled. Otherwise
+    # re-enabling a custom upstream could send its token to the default host.
+    saved_upstream = "x-ns8-disabled-upstream-base-url"
     if ios_push is True:
-        hidden["upstream-base-url"] = hidden.get("upstream-base-url") or "https://ntfy.sh"
-    elif ios_push is False:
-        hidden.pop("upstream-base-url", None)
+        hidden["upstream-base-url"] = (hidden.get("upstream-base-url")
+                                       or hidden.get(saved_upstream)
+                                       or "https://ntfy.sh")
+        hidden.pop(saved_upstream, None)
+    elif ios_push is False and hidden.get("upstream-base-url"):
+        hidden[saved_upstream] = hidden.pop("upstream-base-url")
     if not hidden:
         return content
     return dump_config({**parse_config(content), **hidden})

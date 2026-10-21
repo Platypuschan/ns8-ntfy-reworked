@@ -184,8 +184,8 @@ change the upstream token storage format.
 
 Enable **iOS instant notifications** in Settings to send wake-up requests via
 `https://ntfy.sh`. An existing custom upstream URL is preserved. Disabling the
-switch removes only the upstream URL, preserving an existing private upstream
-token. The switch does not expose that token. A token is normally unnecessary
+switch disables forwarding while preserving both the private token and the
+previous target for re-enabling. The switch does not expose that token. A token is normally unnecessary
 unless the upstream requires authentication or higher limits are needed.
 
 The official iOS app needs the external push infrastructure for timely

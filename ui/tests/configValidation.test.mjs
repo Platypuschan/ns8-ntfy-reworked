@@ -46,6 +46,7 @@ test("reject credentials and module-owned options before task submission", () =>
     "web-push-private-key: secret",
     "stripe-webhook-key: secret",
     "behind-proxy: false",
+    "x-ns8-disabled-upstream-base-url: https://unused.example.test",
     "enable_login: false",
   ]) {
     assert.equal(validateServerConfig(source, policy), false);

@@ -11,7 +11,8 @@
   ],
   "managed_prefixes": [
     "smtp-sender-",
-    "upstream-"
+    "upstream-",
+    "x-ns8-"
   ],
   "secret_pattern": "(?:^|-)(?:password|pass|token|secret|private-key)(?:$|-)",
   "option_pattern": "^[a-z][a-z0-9-]*$"

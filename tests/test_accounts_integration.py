@@ -44,6 +44,7 @@ auth-default-access: deny-all
 cache-file: {root / 'cache.db'}
 smtp-server-listen: 127.0.0.1:{smtp}
 smtp-server-domain: push.example.test
+x-ns8-disabled-upstream-base-url: https://unused.example.test
 ''')
             with (root / 'server.log').open('w') as log:
                 server = subprocess.Popen([BINARY, 'serve', '--config', str(conf)], stdout=log, stderr=log)

@@ -77,6 +77,12 @@ web-push-private-key: secret-vapid
         disabled = config.parse_config(config.merge_configuration('', existing, False))
         self.assertNotIn('upstream-base-url', disabled)
         self.assertEqual(disabled['upstream-access-token'], 'secret')
+        reenabled = config.parse_config(config.merge_configuration('', config.dump_config(disabled), True))
+        self.assertEqual(reenabled['upstream-base-url'], 'https://custom.example.org')
+        self.assertEqual(reenabled['upstream-access-token'], 'secret')
+        self.assertNotIn('x-ns8-disabled-upstream-base-url', reenabled)
+        self.assertNotIn('custom.example.org', config.editable_config(config.dump_config(disabled)))
+        self.assertIsNotNone(config.validate_server_config('x-ns8-disabled-upstream-base-url: https://wrong.example.org'))
         fresh = config.parse_config(config.merge_configuration('', '', True))
         self.assertEqual(fresh['upstream-base-url'], 'https://ntfy.sh')
 

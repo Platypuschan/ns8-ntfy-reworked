@@ -56,7 +56,11 @@ existing tokens.
 The upstream implementation is already present. The change is limited to a
 boolean setting, a UI switch and server-side handling of `upstream-base-url`.
 Enabling uses an existing upstream or defaults to `https://ntfy.sh`. Disabling
-removes the URL without deleting its optional token. No additional container,
+removes the active URL without deleting its optional token. The previous target
+is kept in a private `x-ns8-disabled-upstream-base-url` metadata key in the same
+backed-up file, so re-enabling restores the custom target instead of sending its
+token to ntfy.sh. The pinned ntfy runtime ignores this module metadata; the
+real-binary startup test covers that behavior. No additional container,
 port or push service is needed. The optional token stays out of UI responses.
 
 Actual iOS/APNS delivery was not tested on a device. External upstream
