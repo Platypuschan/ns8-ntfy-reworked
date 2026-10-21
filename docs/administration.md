@@ -20,7 +20,9 @@ in the editor. Unknown spelling variants are not a second configuration path:
 new YAML must use lowercase option names with hyphens.
 
 Users created from the module page use ntfy's native authentication database.
-No password is saved by the module, and credentials are never returned by list
+The account list has no password column or password reveal control. Only a new
+password is shown directly in its creation/reset result; password reset remains
+available. No password is saved by the module, and credentials are never returned by list
 or configuration actions. Existing declaratively provisioned objects remain
 read-only where ntfy disallows CLI changes. The page is part of the existing
 NS8 administrative interface; ntfy application accounts do not authorize NS8
@@ -67,6 +69,9 @@ Actual iOS/APNS delivery was not tested on a device. External upstream
 availability, Internet access and the app's connectivity still matter.
 
 ## Mail-to-push on NS8
+
+Deferred by explicit user decision on 2026-10-22. The assessment below is retained
+as reference only; no mail-to-push integration is part of the current work.
 
 **Feasible for authenticated internal senders with moderate module work; not
 enabled by this change. Public incoming mail needs additional domain handling.**

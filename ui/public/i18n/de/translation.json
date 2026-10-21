@@ -72,11 +72,10 @@
     },
     "accounts": {
         "title": "Benutzer und Tokens",
-        "description": "ntfy-Konten, Tokens und Topic-Berechtigungen verwalten. ntfy muss zuvor konfiguriert und gestartet sein. Änderungen starten ntfy kurz neu.",
+        "description": "ntfy-Konten, Tokens und Topic-Berechtigungen verwalten. ntfy muss zuvor konfiguriert und gestartet sein. Änderungen starten ntfy kurz neu. Bestehende Passwörter lassen sich nicht anzeigen; bei Bedarf ein neues Passwort erzeugen.",
         "users": "Benutzer",
         "username": "Benutzername",
         "role": "Rolle",
-        "password": "Passwort",
         "actions": "Aktionen",
         "provisioned": "Serverkonfiguration",
         "provisioned_help": "Bereits deklarativ angelegte Konten, Tokens und Regeln bleiben erhalten. Ihre geschützten Eigenschaften werden in der Serverkonfiguration auf dem NS8-Knoten verwaltet.",

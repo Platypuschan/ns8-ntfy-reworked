@@ -71,11 +71,10 @@
   },
   "accounts": {
     "title": "Users and tokens",
-    "description": "Manage ntfy accounts, tokens and topic permissions. Configure and start ntfy before using this page. Changes briefly restart ntfy.",
+    "description": "Manage ntfy accounts, tokens and topic permissions. Configure and start ntfy before using this page. Changes briefly restart ntfy. Existing passwords cannot be displayed; generate a new password when needed.",
     "users": "Users",
     "username": "Username",
     "role": "Role",
-    "password": "Password",
     "actions": "Actions",
     "provisioned": "server configuration",
     "provisioned_help": "Existing declaratively provisioned accounts, tokens and rules are preserved. Their protected properties must be changed in the server configuration on the NS8 node.",

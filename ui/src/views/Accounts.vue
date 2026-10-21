@@ -28,10 +28,18 @@
                 $t("accounts.new_credential", { username: credential.username })
               }}
             </p>
-            <code>{{ visible ? credential.value : "••••••••••••" }}</code>
-            <NsButton kind="ghost" size="small" @click="visible = !visible">{{
-              $t(visible ? "accounts.hide" : "accounts.show")
-            }}</NsButton>
+            <code>{{
+              credential.kind === "password" || visible
+                ? credential.value
+                : "••••••••••••"
+            }}</code>
+            <NsButton
+              v-if="credential.kind === 'token'"
+              kind="ghost"
+              size="small"
+              @click="visible = !visible"
+              >{{ $t(visible ? "accounts.hide" : "accounts.show") }}</NsButton
+            >
             <NsButton kind="ghost" size="small" @click="copyCredential">{{
               $t(copied ? "accounts.copied" : "accounts.copy")
             }}</NsButton>
@@ -46,7 +54,6 @@
                 <tr>
                   <th>{{ $t("accounts.username") }}</th>
                   <th>{{ $t("accounts.role") }}</th>
-                  <th>{{ $t("accounts.password") }}</th>
                   <th>{{ $t("accounts.actions") }}</th>
                 </tr>
               </thead>
@@ -59,7 +66,6 @@
                     >
                   </td>
                   <td>{{ $t("accounts." + user.role) }}</td>
-                  <td>••••••••••••</td>
                   <td>
                     <NsButton
                       kind="ghost"
@@ -83,7 +89,7 @@
                   </td>
                 </tr>
                 <tr v-if="!namedUsers.length">
-                  <td colspan="4">{{ $t("accounts.no_users") }}</td>
+                  <td colspan="3">{{ $t("accounts.no_users") }}</td>
                 </tr>
               </tbody>
             </table>
@@ -449,6 +455,7 @@ export default {
         if (result.password || result.token)
           this.credential = {
             username: result.username,
+            kind: result.password ? "password" : "token",
             value: result.password || result.token,
           };
         this.restartFailed = !!result.restart_failed;

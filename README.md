@@ -157,8 +157,11 @@ api-cli run module/ntfy-reworked1/get-configuration
 Open **Users and tokens** in the NS8 module UI after configuring ntfy. It lists
 users and roles, tokens (label and expiry only), and topic ACLs. Create users
 with generated passwords, generate replacement passwords, create tokens with
-an expiry, revoke tokens, and grant or remove topic permissions. Passwords and
-tokens are masked by default; only newly generated values can be shown/copied.
+an expiry, revoke tokens, and grant or remove topic permissions. Existing
+passwords have no display or reveal control. A newly generated password
+is shown directly in the creation/reset result for copying, then discarded when
+that result is dismissed or the page is left. Newly generated tokens are masked
+by default and can be revealed/copied in their creation result.
 The last administrator cannot be deleted through this page.
 
 A new installation uses `deny-all`; regular users need explicit topic rights.
@@ -245,6 +248,7 @@ SMTP sender options are hidden from the editor and preserved when saving.
 Manual changes to these options must be made in the private `config/server.yml`
 on the NS8 node. Existing explicit relay settings continue to take precedence.
 
+Mail-to-push integration is deferred by user decision (2026-10-22).
 Incoming email publishing is unrelated to the NS8 smarthost. ntfy supports
 `smtp-server-*`, but this module currently publishes only HTTP; setting those
 options alone does not make SMTP reachable. A separate module integration is
