@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Account administration using the CLI shipped with ntfy v2.28.0.
+"""Account administration using the CLI shipped with ntfy v2.34.0.
 
 Never forward command output/errors to NS8 tasks: token list includes secrets.
 Only creation responses contain a new credential; list responses use opaque IDs.
