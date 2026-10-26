@@ -4,7 +4,7 @@ This repository packages [ntfy](https://ntfy.sh/) for NethServer 8. The module
 provides a Traefik route, user/token/topic administration, an editor for public
 ntfy settings, backup and restore,
 and optional outgoing mail through the NS8 smarthost. It runs the
-`docker.io/binwiederhier/ntfy:v2.28.0` image.
+`docker.io/binwiederhier/ntfy:v2.34.0` image.
 
 ## Install
 
@@ -299,6 +299,13 @@ python3 -m pip install PyYAML==6.0.3
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
+## Upgrading to ntfy 2.34.0
+
+Before updating from a module using ntfy 2.28.0, create a complete NS8
+module backup. ntfy migrates the SQLite message cache from schema 15 to 17;
+ntfy 2.28.0 cannot open the migrated cache. To roll back, restore the backup
+with the previous module version rather than only changing the runtime image.
+
 ## Minimum NS8 core version
 
 This module requires NS8 core **3.22.0** or newer. This conservative minimum
@@ -310,7 +317,7 @@ declares this requirement in `org.nethserver.min-core`.
 For a local CLI/HTTP/SMTP integration check against the packaged upstream version:
 
 ```bash
-NTFY_TEST_BINARY=/path/to/ntfy-v2.28.0 \
+NTFY_TEST_BINARY=/path/to/ntfy-v2.34.0 \
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 

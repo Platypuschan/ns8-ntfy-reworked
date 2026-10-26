@@ -17,7 +17,7 @@ repobase="${REPOBASE:-ghcr.io/platypuschan}"
 reponame="ntfy-reworked"
 repository_source="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-Platypuschan/ns8-ntfy-reworked}"
 MODULE_VERSION="$(tr -d '\r\n' < CATALOG_VERSION)"
-NTFY_TAG="v2.28.0"
+NTFY_TAG="v2.34.0"
 # Keep in sync with the Node.js version used by .github/workflows/validate.yml
 NODE_IMAGE="docker.io/library/node:24.20.0"
 nodebuilder="nodebuilder-ntfy-${NODE_IMAGE##*:}"

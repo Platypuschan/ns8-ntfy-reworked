@@ -93,6 +93,13 @@ Check service health after install or update
     Read allocated web port
     Wait until ntfy is healthy
 
+Check packaged runtime version
+    ${output}    ${rc} =    Execute Command    runagent -m ${module_id} podman exec ntfy-app ntfy --version
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    ${output} =    Strip String    ${output}
+    Should Be Equal    ${output}    ntfy version 2.34.0
+
 Check data kept by the update
     Skip If    r'${SCENARIO}' != 'update'    only the update scenario has data from the previous release
     ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 'http://127.0.0.1:${web_port}/ci-before-update/json?poll=1'
