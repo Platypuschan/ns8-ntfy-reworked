@@ -43,8 +43,7 @@ Configure current module with test server.yml
     ...    base-url: "http://${HOST}"
     ...    cache-file: "/var/lib/ntfy/cache.db"
     ...    attachment-cache-dir: "/var/lib/ntfy/attachments"
-    ...    behind-proxy: false
-    ...    proxy-forwarded-header: "X-Real-IP"
+    ...    auth-file: "/var/lib/ntfy/auth.db"
     ${payload} =    Evaluate    json.dumps({"host": $HOST, "http2https": False, "lets_encrypt": False, "server_config": $server_config})    modules=json
     ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
     ...    return_rc=True
@@ -112,7 +111,7 @@ Check server.yml persistence and read-only mount
 
     ${config} =    Execute Command    runagent -m ${module_id} cat config/server.yml
     Should Contain    ${config}    cache-file: "/var/lib/ntfy/cache.db"
-    Should Contain    ${config}    behind-proxy: false
+    Should Not Contain    ${config}    behind-proxy: false
 
     ${read_write} =    Execute Command    runagent -m ${module_id} podman inspect ntfy-app --format '{{range .Mounts}}{{if eq .Destination "/etc/ntfy"}}{{println .RW}}{{end}}{{end}}'
     ${read_write} =    Strip String    ${read_write}
@@ -122,6 +121,43 @@ Check enforced NS8 proxy settings
     ${environment} =    Execute Command    runagent -m ${module_id} podman exec ntfy-app env
     Should Contain    ${environment}    NTFY_BEHIND_PROXY=true
     Should Contain    ${environment}    NTFY_PROXY_FORWARDED_HEADER=X-Forwarded-For
+
+Reject duplicate and module-managed YAML options
+    ${payload} =    Evaluate    json.dumps({"host": $HOST, "http2https": False, "lets_encrypt": False, "server_config": "{enable-login: true, enable-login: false}"})    modules=json
+    ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
+    ...    return_rc=True
+    Should Not Be Equal As Integers    ${rc}    0
+    ${payload} =    Evaluate    json.dumps({"host": $HOST, "http2https": False, "lets_encrypt": False, "server_config": "behind-proxy: false"})    modules=json
+    ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/configure-module --data '${payload}'
+    ...    return_rc=True
+    Should Not Be Equal As Integers    ${rc}    0
+    Wait until ntfy is healthy
+
+Manage accounts through NS8 actions
+    # Do not record generated credentials in Robot's command output.
+    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"add-user","username":"ci-worker"}' >/dev/null
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
+    Wait until ntfy is healthy
+    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"reset-password","username":"ci-worker"}' >/dev/null
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
+    Wait until ntfy is healthy
+    ${rc} =    Execute Command    api-cli run module/${module_id}/manage-account --data '{"operation":"add-token","username":"ci-worker","label":"ci-monitoring","expires":"1d"}' >/dev/null
+    ...    return_rc=True    return_stdout=False
+    Should Be Equal As Integers    ${rc}    0
+    Wait until ntfy is healthy
+    ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/list-accounts
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    Should Contain    ${output}    ci-worker
+    Should Contain    ${output}    ci-monitoring
+    Should Not Contain    ${output}    tk_
+    Should Not Contain    ${output}    "password"
+    ${output}    ${rc} =    Execute Command    api-cli run module/${module_id}/list-accounts --data '{}'
+    ...    return_rc=True
+    Should Be Equal As Integers    ${rc}    0
+    Should Contain    ${output}    ci-monitoring
 
 Check public HTTP route
     ${output}    ${rc} =    Execute Command    curl -fsS --max-time 10 --resolve ${HOST}:80:127.0.0.1 http://${HOST}/v1/health
@@ -191,6 +227,18 @@ Module UI loads in cluster-admin
     Wait For Elements State    iframe >>> input[placeholder="ntfy.example.org"]    enabled    timeout=30s
     Get Property    iframe >>> input[placeholder="ntfy.example.org"]    value    ==    ${HOST}
     Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/2._Settings.png
+    Go To    https://${NODE_ADDR}/cluster-admin/#/apps/${module_id}?page=accounts
+    Wait For Elements State    iframe >>> h2 >> text="Users and tokens"    visible    timeout=20s
+    Wait For Elements State    iframe >>> td >> text="ci-worker" >> nth=0    visible    timeout=30s
+    Get Property    iframe >>> select#token-expiry    value    ==    never
+    Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/3._Accounts.png
+    # A tall viewport also expands the module iframe, so the complete account,
+    # token and ACL sections fit in a single review image.
+    Set Viewport Size    1280    2600
+    Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/4._Accounts_full.png    fullPage=True
+    Set Viewport Size    1280    720
+    Scroll To Element    iframe >>> select#token-user
+    Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/5._Tokens.png
     Close Browser
 
 Remove module

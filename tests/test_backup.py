@@ -120,10 +120,11 @@ class SnapshotTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "")
             return subprocess.CompletedProcess(command, 0, "")
 
-        with patch.object(ntfy_backup, "volume_mountpoint", return_value="/test/volume"):
-            with patch.object(ntfy_backup.subprocess, "run", side_effect=fake_run):
-                with self.assertRaises(subprocess.CalledProcessError):
-                    ntfy_backup.make_snapshot("/test/state")
+        with tempfile.TemporaryDirectory() as state_dir:
+            with patch.object(ntfy_backup, "volume_mountpoint", return_value="/test/volume"):
+                with patch.object(ntfy_backup.subprocess, "run", side_effect=fake_run):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        ntfy_backup.make_snapshot(state_dir)
 
         self.assertIn(("systemctl", "--user", "stop", "ntfy.service"), calls)
         self.assertIn(("systemctl", "--user", "start", "ntfy.service"), calls)

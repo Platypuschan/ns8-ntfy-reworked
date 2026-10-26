@@ -11,6 +11,11 @@ Vue.use(VueRouter);
 
 const routes = [
   {
+    path: "/accounts",
+    name: "Accounts",
+    component: () => import("../views/Accounts.vue"),
+  },
+  {
     path: "/",
     name: "Status",
     component: Status,
