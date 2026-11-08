@@ -317,7 +317,7 @@ declares this requirement in `org.nethserver.min-core`.
 For a local CLI/HTTP/SMTP integration check against the packaged upstream version:
 
 ```bash
-NTFY_TEST_BINARY=/path/to/ntfy-v2.34.0 \
+NTFY_TEST_BINARY=/path/to/ntfy \
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
