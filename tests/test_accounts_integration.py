@@ -1,4 +1,4 @@
-"""Optional real ntfy CLI/HTTP/SMTP test; set NTFY_TEST_BINARY to v2.34.0.
+"""Optional real ntfy CLI/HTTP/SMTP test; set NTFY_TEST_BINARY to the ntfy binary.
 
 Only Podman/systemd are substituted. NS8 lifecycle and task/UI wiring still
 require an NS8 test. No credentials or raw command output are printed.
@@ -30,7 +30,7 @@ def free_port():
         return sock.getsockname()[1]
 
 
-@unittest.skipUnless(BINARY, 'Set NTFY_TEST_BINARY to the ntfy v2.34.0 executable')
+@unittest.skipUnless(BINARY, 'Set NTFY_TEST_BINARY to the ntfy executable matching NTFY_TAG in build-images.sh')
 class AccountRuntimeTests(unittest.TestCase):
     def test_account_token_acl_and_authenticated_mail_lifecycle(self):
         with tempfile.TemporaryDirectory() as directory:

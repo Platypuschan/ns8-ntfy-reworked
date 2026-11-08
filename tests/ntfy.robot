@@ -98,7 +98,13 @@ Check packaged runtime version
     ...    return_rc=True
     Should Be Equal As Integers    ${rc}    0
     ${output} =    Strip String    ${output}
-    Should Be Equal    ${output}    ntfy version 2.34.0
+    # Compare with the tag of the pinned image (build-images.sh), so a runtime
+    # update does not need a matching edit here.
+    ${running_image} =    Execute Command    runagent -m ${module_id} podman inspect --format '{{.ImageName}}' ntfy-app
+    ${running_image} =    Strip String    ${running_image}
+    Should Match Regexp    ${running_image}    ^docker[.]io/binwiederhier/ntfy:v[0-9]+[.][0-9]+[.][0-9]+$
+    ${tag} =    Fetch From Right    ${running_image}    :v
+    Should Be Equal    ${output}    ntfy version ${tag}
 
 Check data kept by the update
     Skip If    r'${SCENARIO}' != 'update'    only the update scenario has data from the previous release
