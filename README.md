@@ -4,7 +4,7 @@ This repository packages [ntfy](https://ntfy.sh/) for NethServer 8. The module
 provides a Traefik route, user/token/topic administration, an editor for public
 ntfy settings, backup and restore,
 and optional outgoing mail through the NS8 smarthost. It runs the
-`docker.io/binwiederhier/ntfy:v2.34.0` image.
+`docker.io/binwiederhier/ntfy:v2.37.2` image.
 
 ## Install
 
