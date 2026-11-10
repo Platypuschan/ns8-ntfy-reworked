@@ -19,7 +19,7 @@ repository_source="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:
 MODULE_VERSION="$(tr -d '\r\n' < CATALOG_VERSION)"
 NTFY_TAG="v2.37.2"
 # Keep in sync with the Node.js version used by .github/workflows/validate.yml
-NODE_IMAGE="docker.io/library/node:24.20.0"
+NODE_IMAGE="docker.io/library/node:24.22.2"
 nodebuilder="nodebuilder-ntfy-${NODE_IMAGE##*:}"
 # Create a new empty container image
 container=$(buildah from scratch)
