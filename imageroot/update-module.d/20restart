@@ -12,6 +12,8 @@ set -e
 # Redirect any output to the journal (stderr)
 exec 1>&2
 
-# Load the unit files of the new release before restarting.
+# The core has already reloaded the unit files of the new release
+# (update-module/05pullimages); reloading again is harmless and keeps the
+# hook usable on its own.
 systemctl --user daemon-reload
 systemctl --user try-restart ntfy.service
